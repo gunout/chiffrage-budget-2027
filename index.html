@@ -76,7 +76,6 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
 .type-item:hover{border-color:var(--blue-france);background:var(--blue-france-soft);transform:translateX(2px);}
 .type-item.active{background:var(--blue-france-soft);border-color:var(--blue-france);border-left-color:var(--red-marianne);box-shadow:0 0 0 2px var(--blue-france-soft);}
 .type-item.active .type-name{color:var(--blue-france)}
-.type-item.active .status-dot{background:var(--blue-france);animation:pulse 1.8s infinite;}
 .type-h{display:flex;align-items:center;gap:8px;margin-bottom:4px;}
 .type-icon{font-size:18px;flex-shrink:0}
 .type-name{font-size:12px;font-weight:700;color:var(--text);flex:1;line-height:1.3;}
@@ -131,10 +130,6 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
 .rc-badge.type{background:var(--blue-france);color:#fff;text-transform:none}
 .rc-badge.dept{background:var(--grey-700);color:#fff}
 .rc-badge.effort{background:var(--red-marianne);color:#fff;text-transform:none}
-.rc-badge.solid{background:var(--gold);color:#1e1e1e;text-transform:none}
-.rc-badge.solid.etabli{background:var(--green-emeraude);color:#fff}
-.rc-badge.solid.indicatif{background:var(--gold);color:#1e1e1e}
-.rc-badge.solid.ordre{background:var(--red-marianne);color:#fff}
 .rc-org{color:var(--grey-700);font-weight:600;font-size:12px;margin-bottom:6px;}
 .rc-meta{display:flex;gap:6px;font-family:var(--font-mono);font-size:10px;color:var(--grey-500);flex-wrap:wrap;margin-top:8px;}
 .rc-meta .tag{background:var(--grey-50);padding:3px 8px;border-radius:3px;border:1px solid var(--border);color:var(--grey-700);}
@@ -195,7 +190,6 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
 .toast.info{background:var(--blue-france)}
 @keyframes slideInRight{from{transform:translateX(120%);opacity:0}to{transform:translateX(0);opacity:1}}
 
-/* Charts */
 .bar-row{display:grid;grid-template-columns:160px 1fr 120px;align-items:center;gap:8px;margin-bottom:8px;font-size:11px;}
 .bar-row .name{color:var(--grey-700);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-family:var(--font-mono);font-weight:600;}
 .bar-track{background:var(--grey-100);border-radius:3px;height:18px;overflow:hidden;}
@@ -217,6 +211,14 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
 .cat-head{display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:8px;}
 .cat-name{font-size:13px;font-weight:700;color:var(--text);}
 .cat-count-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;background:var(--blue-france);color:#fff;padding:2px 7px;border-radius:3px;}
+
+/* --- Carte --- */
+.dept-rect{stroke:var(--bg-panel);stroke-width:.4;transition:all .2s;cursor:pointer;}
+.dept-rect:hover{filter:brightness(.85);stroke:var(--text);stroke-width:1.5;}
+
+/* --- Versus --- */
+.versus-select{background:var(--bg-panel);border:2px solid var(--border);padding:10px;border-radius:4px;font-size:12px;font-family:var(--font-sans);color:var(--text);width:100%;}
+.versus-select:focus{outline:none;}
 
 @media(max-width:900px){
   .app{display:flex;flex-direction:column;height:auto;}
@@ -297,7 +299,9 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
     <div class="mode-tabs">
       <button class="mode-tab active" data-view="results">📋 Lignes</button>
       <button class="mode-tab" data-view="categories">📂 Mesures</button>
+      <button class="mode-tab" data-view="map">🌍 Carte</button>
       <button class="mode-tab" data-view="analytics">📊 Analyses</button>
+      <button class="mode-tab" data-view="versus">🆚 A vs B</button>
       <button class="mode-tab" data-view="compare">⚖️ Comparer types</button>
       <button class="mode-tab" data-view="quality">🔍 Qualité</button>
     </div>
@@ -305,10 +309,6 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
     <div class="help-banner" id="helpBanner" hidden></div>
 
     <div class="filters-bar" id="filtersBar" hidden>
-      <div class="filter-group">
-        <span class="filter-label">📊 Solidité :</span>
-        <div id="solidChips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
-      </div>
       <div class="filter-group">
         <span class="filter-label">🎯 Décile :</span>
         <div id="decileChips" style="display:flex;gap:5px;flex-wrap:wrap"></div>
@@ -348,6 +348,7 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
     <div class="export-group">
       <button class="export-btn" id="exportCsv" disabled>📥 CSV</button>
       <button class="export-btn" id="exportJson" disabled>📥 JSON</button>
+      <button class="export-btn" id="exportPng" disabled>🖼️ PNG</button>
       <button class="export-btn" id="clearBtn">🗑️ Effacer</button>
     </div>
   </main>
@@ -389,11 +390,13 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
   </aside>
 
 </div>
+
 <script>
 /* =========================================================
    CONFIG
    ========================================================= */
 const API_URL = 'https://www.data.gouv.fr/api/1/datasets/chiffrage-du-projet-de-loi-de-finances-pour-2027-pour-chaque-commune-intercommunalite-et-departement/';
+const BP_SIM_URL = 'https://bp-avocats.bzh/plf-2027/';
 
 const SIX_MESURES = [
   { key:'art37', label:'Contribution progressive (art. 37)' },
@@ -403,7 +406,50 @@ const SIX_MESURES = [
   { key:'art34', label:'Minoration DTCE (art. 34)' },
   { key:'cnracl', label:'Hausse CNRACL' }
 ];
+
 const SOLIDITES = ['établi','étayé','indicatif','ordre de grandeur'];
+
+/* =========================================================
+   CARTE — NOMS + GRILLE DÉPARTEMENTS
+   ========================================================= */
+const DEPT_NAMES = {
+  '01':'Ain','02':'Aisne','03':'Allier','04':'Alpes-de-Haute-Provence','05':'Hautes-Alpes',
+  '06':'Alpes-Maritimes','07':'Ardèche','08':'Ardennes','09':'Ariège','10':'Aube',
+  '11':'Aude','12':'Aveyron','13':'Bouches-du-Rhône','14':'Calvados','15':'Cantal',
+  '16':'Charente','17':'Charente-Maritime','18':'Cher','19':'Corrèze','21':'Côte-d\'Or',
+  '22':'Côtes-d\'Armor','23':'Creuse','24':'Dordogne','25':'Doubs','26':'Drôme',
+  '27':'Eure','28':'Eure-et-Loir','29':'Finistère','2A':'Corse-du-Sud','2B':'Haute-Corse',
+  '30':'Gard','31':'Haute-Garonne','32':'Gers','33':'Gironde','34':'Hérault',
+  '35':'Ille-et-Vilaine','36':'Indre','37':'Indre-et-Loire','38':'Isère','39':'Jura',
+  '40':'Landes','41':'Loir-et-Cher','42':'Loire','43':'Haute-Loire','44':'Loire-Atlantique',
+  '45':'Loiret','46':'Lot','47':'Lot-et-Garonne','48':'Lozère','49':'Maine-et-Loire',
+  '50':'Manche','51':'Marne','52':'Haute-Marne','53':'Mayenne','54':'Meurthe-et-Moselle',
+  '55':'Meuse','56':'Morbihan','57':'Moselle','58':'Nièvre','59':'Nord',
+  '60':'Oise','61':'Orne','62':'Pas-de-Calais','63':'Puy-de-Dôme','64':'Pyrénées-Atlantiques',
+  '65':'Hautes-Pyrénées','66':'Pyrénées-Orientales','67':'Bas-Rhin','68':'Haut-Rhin',
+  '69':'Rhône','70':'Haute-Saône','71':'Saône-et-Loire','72':'Sarthe','73':'Savoie',
+  '74':'Haute-Savoie','75':'Paris','76':'Seine-Maritime','77':'Seine-et-Marne',
+  '78':'Yvelines','79':'Deux-Sèvres','80':'Somme','81':'Tarn','82':'Tarn-et-Garonne',
+  '83':'Var','84':'Vaucluse','85':'Vendée','86':'Vienne','87':'Haute-Vienne',
+  '88':'Vosges','89':'Yonne','90':'Territoire de Belfort','91':'Essonne',
+  '92':'Hauts-de-Seine','93':'Seine-Saint-Denis','94':'Val-de-Marne','95':'Val-d\'Oise'
+};
+
+const DEPT_GRID = [
+  ['59',1,9],['62',1,8],['80',2,8],['76',2,7],['14',3,7],['50',3,6],['35',4,6],['22',4,5],['29',4,4],
+  ['02',2,10],['08',2,11],['55',3,10],['54',3,11],['57',3,12],['67',4,13],['68',4,12],
+  ['77',4,10],['93',4,9],['95',4,8],['75',5,9],['92',5,8],['78',5,7],['91',5,10],['94',5,10],
+  ['27',5,6],['28',6,7],['61',5,4],['72',6,4],['53',6,3],['49',7,4],['44',7,2],['56',6,1],
+  ['85',8,3],['79',8,4],['86',8,5],['37',9,4],['41',8,6],['45',7,7],['89',7,9],
+  ['10',6,11],['52',6,12],['70',6,13],['88',5,14],['90',6,15],['25',7,15],['39',8,14],
+  ['71',8,13],['21',8,12],['58',9,11],['03',10,10],['18',10,8],['36',11,8],['23',11,10],
+  ['87',12,9],['16',11,5],['17',11,3],['24',12,5],['33',11,3],['40',12,2],['64',13,1],
+  ['65',14,3],['32',13,5],['31',14,5],['09',14,6],['11',15,7],['66',15,8],['34',15,9],
+  ['81',14,8],['12',13,10],['46',12,8],['82',13,7],['47',11,5],['69',10,13],['01',10,14],
+  ['38',11,15],['73',12,16],['74',11,16],['63',10,12],['15',11,11],['43',12,12],['07',13,13],
+  ['26',12,14],['42',10,13],['04',15,15],['05',14,16],['06',15,16],['83',15,14],
+  ['84',14,13],['13',14,11],['30',14,10],['48',13,12],['2A',16,17],['2B',15,17]
+];
 
 /* =========================================================
    UTILITAIRES
@@ -443,12 +489,12 @@ function toast(message, type='info', duration=3000){
 const state = {
   all: [], filtered: [],
   activeTypes: new Set(['commune','intercommunalite','departement']),
-  selectedSolidites: new Set(),
   selectedDeciles: new Set(),
   currentPage: 1, pageSize: 25, totalResults: 0,
   activities: [], mode: 'init',
   theme: localStorage.getItem('plf2027-theme') || 'light',
-  abort: null
+  abort: null,
+  versusA: null, versusB: null
 };
 
 /* =========================================================
@@ -469,7 +515,6 @@ function toggleTheme(){
    PARSING CSV ROBUSTE (détecte ; , ou \t)
    ========================================================= */
 function parseCSV(text){
-  // Détection du séparateur
   const firstLine = text.split(/\r?\n/)[0] || '';
   const counts = { ',': 0, ';': 0, '\t': 0 };
   for (const c of firstLine) if (c in counts) counts[c]++;
@@ -496,16 +541,13 @@ function parseCSV(text){
 }
 
 /* =========================================================
-   DÉTECTION DU TYPE PAR LE CODE
+   DÉTECTION TYPE PAR CODE
    ========================================================= */
 function detectTypeFromCode(code){
   if (!code) return 'autre';
   const c = String(code).trim();
-  // Départements : 2 chiffres, 2A/2B, ou 3 chiffres (971-976)
   if (/^\d{2}$/.test(c) || /^2[AB]$/i.test(c) || /^9[7]\d$/.test(c)) return 'departement';
-  // Intercommunalités : 9 chiffres commençant par 2
   if (/^2\d{8}$/.test(c)) return 'intercommunalite';
-  // Communes : 5 chiffres
   if (/^\d{5}$/.test(c)) return 'commune';
   return 'autre';
 }
@@ -514,23 +556,6 @@ function detectTypeFromCode(code){
    NORMALISATION PAR POSITION (format PLF 2027, 15 colonnes)
    ========================================================= */
 function normalizeRowFromArray(arr){
-  // Mapping attendu (d'après les données observées) :
-  // 0: code (INSEE/SIREN/dept)
-  // 1: libellé
-  // 2: type textuel (Intercommunalité, Commune, Département)
-  // 3: population
-  // 4: effort total (€)
-  // 5: décile
-  // 6: effort par habitant (€)
-  // 7: art37 contribution progressive
-  // 8: art35 baisse FCTVA
-  // 9: art36 écrêtement TVA
-  // 10: art84 report DILICO
-  // 11: art34 minoration DTCE
-  // 12: cnracl hausse cotisation
-  // 13: effort total confirmé (ou recalculé)
-  // 14: ???
-
   const code = String(arr[0] || '').trim();
   const nom = String(arr[1] || '').trim();
   const typeText = String(arr[2] || '').toLowerCase().trim();
@@ -539,7 +564,6 @@ function normalizeRowFromArray(arr){
   const decile = String(arr[5] || '—').trim();
   const hab = toNumber(arr[6]);
 
-  // Détection du type : le texte est plus fiable que le code pour les intercos
   let type;
   if (typeText.includes('intercommunal') || typeText.includes('epci') || typeText.includes('agglomération') || typeText.includes('agglomeration')){
     type = 'intercommunalite';
@@ -548,7 +572,6 @@ function normalizeRowFromArray(arr){
   } else if (typeText.includes('commune')){
     type = 'commune';
   } else {
-    // Fallback sur le code
     type = detectTypeFromCode(code);
   }
 
@@ -561,7 +584,6 @@ function normalizeRowFromArray(arr){
     cnracl: toNumber(arr[12])
   };
 
-  // Effort recalculé si la colonne 4 est vide
   const effortCalc = Object.values(mesures).reduce((s,v)=>s+v,0);
   const effortFinal = effort || effortCalc;
 
@@ -592,6 +614,7 @@ async function loadFromAPI(){
     const csvRes = (data.resources || []).filter(x => (x.format||'').toLowerCase() === 'csv' && x.url);
     state.mode = 'api';
     safeSet('tbMode', 'API', 'val green');
+    safeSet('ivMode', 'API');
     safeSet('ivStatus', '● EN LIGNE', 'v green');
     safeSet('ivLastCall', new Date().toLocaleTimeString('fr-FR'));
     document.getElementById('statusDot')?.classList.remove('offline');
@@ -624,18 +647,14 @@ async function fetchAllCsv(csvRes, signal){
       const r = await fetch(res.url, { signal });
       if (!r.ok) continue;
       const text = await r.text();
-      const { rows, sep } = parseCSV(text);
-      console.log(`[CSV] ${res.title} → ${rows.length} lignes, séparateur="${sep}", exemple:`, rows[0]);
+      const { rows } = parseCSV(text);
       if (rows.length < 1) continue;
-      // Détecte si la 1ʳᵉ ligne est un en-tête (contient des mots-clés)
       const firstRowStr = rows[0].join(' ').toLowerCase();
-      const hasHeader = /libell|nom|code|insee|effort|montant|départ|type/.test(firstRowStr) &&
-                        !/^\d/.test(rows[0][0]);
+      const hasHeader = /libell|nom|code|insee|effort|montant|départ|type/.test(firstRowStr) && !/^\d/.test(rows[0][0]);
       const startIdx = hasHeader ? 1 : 0;
       for (let i = startIdx; i < rows.length; i++){
         const rrow = rows[i];
         if (!rrow.length || !rrow.some(c => String(c).trim())) continue;
-        // Ignore les lignes trop courtes (probablement pas des données)
         if (rrow.length < 5) continue;
         all.push(normalizeRowFromArray(rrow));
       }
@@ -666,12 +685,10 @@ async function handleFiles(files){
   for (const file of csvFiles){
     try {
       const text = await file.text();
-      const { rows, sep } = parseCSV(text);
-      console.log(`[CSV local] ${file.name} → ${rows.length} lignes, séparateur="${sep}"`);
+      const { rows } = parseCSV(text);
       if (rows.length < 1) continue;
       const firstRowStr = rows[0].join(' ').toLowerCase();
-      const hasHeader = /libell|nom|code|insee|effort|montant|départ|type/.test(firstRowStr) &&
-                        !/^\d/.test(rows[0][0]);
+      const hasHeader = /libell|nom|code|insee|effort|montant|départ|type/.test(firstRowStr) && !/^\d/.test(rows[0][0]);
       const startIdx = hasHeader ? 1 : 0;
       for (let i = startIdx; i < rows.length; i++){
         const rrow = rows[i];
@@ -683,6 +700,7 @@ async function handleFiles(files){
   }
   state.mode = 'upload';
   safeSet('tbMode', 'LOCAL', 'val green');
+  safeSet('ivMode', 'LOCAL');
   safeSet('ivStatus', '● LOCAL', 'v green');
   document.getElementById('statusDot')?.classList.remove('offline');
   safeSet('ivLastCall', new Date().toLocaleTimeString('fr-FR'));
@@ -700,11 +718,7 @@ function finalizeLoad(rows){
     showResults(`<div class="empty">Aucune donnée exploitable.<br>Vérifiez le format du CSV.</div>`);
     return;
   }
-  console.log('[finalizeLoad] Types détectés :',
-    [...new Set(state.all.map(m=>m.type))],
-    '| Exemple :', state.all[0]);
   updateStats();
-  populateSolidChips();
   populateDecileChips();
   renderTypesSidebar();
   toast(`✅ ${fmtNum(state.all.length)} lignes chargées`, 'success');
@@ -789,31 +803,12 @@ function renderTypesSidebar(){
 /* =========================================================
    FILTRES
    ========================================================= */
-function populateSolidChips(){
-  const el = document.getElementById('solidChips'); if (!el) return;
-  const counts = {};
-  for (const m of state.all){ if (m.solidite && m.solidite !== '—') counts[m.solidite] = (counts[m.solidite]||0)+1; }
-  el.innerHTML = SOLIDITES.map(s => {
-    const c = counts[s] || 0;
-    const active = state.selectedSolidites.has(s);
-    return `<span class="chip ${active?'active':''}" data-solid="${s}">${escapeHtml(s)} <span style="opacity:.6">(${c})</span></span>`;
-  }).join('');
-  el.querySelectorAll('.chip').forEach(ch => {
-    ch.addEventListener('click', () => {
-      const s = ch.dataset.solid;
-      if (state.selectedSolidites.has(s)) state.selectedSolidites.delete(s);
-      else state.selectedSolidites.add(s);
-      populateSolidChips(); applyFilters(1);
-    });
-  });
-}
-
 function populateDecileChips(){
   const el = document.getElementById('decileChips'); if (!el) return;
   const deciles = [...new Set(state.all.map(m=>m.decile).filter(d=>d && d!=='—'))].sort((a,b)=>parseInt(a)-parseInt(b));
   el.innerHTML = deciles.map(d => {
     const active = state.selectedDeciles.has(d);
-    return `<span class="chip ${active?'active':''}" data-decile="${d}">${escapeHtml(d)}</span>`;
+    return `<span class="chip ${active?'active':''}" data-decile="${d}">D${escapeHtml(d)}</span>`;
   }).join('');
   el.querySelectorAll('.chip').forEach(ch => {
     ch.addEventListener('click', () => {
@@ -832,10 +827,9 @@ function applyFilters(page = 1){
 
   state.filtered = state.all.filter(m => {
     if (!state.activeTypes.has(m.type)) return false;
-    if (state.selectedSolidites.size && !state.selectedSolidites.has(m.solidite)) return false;
     if (state.selectedDeciles.size && !state.selectedDeciles.has(m.decile)) return false;
     if (!q) return true;
-    const hay = [m.nom, m.insee, m.dept, m.decile, m.solidite].join(' ').toLowerCase();
+    const hay = [m.nom, m.insee, m.dept, m.decile].join(' ').toLowerCase();
     return hay.includes(q);
   });
 
@@ -860,13 +854,15 @@ function applyFilters(page = 1){
 
   const eCsv = document.getElementById('exportCsv');
   const eJson = document.getElementById('exportJson');
+  const ePng = document.getElementById('exportPng');
   if (eCsv) eCsv.disabled = !state.totalResults;
   if (eJson) eJson.disabled = !state.totalResults;
+  if (ePng) ePng.disabled = !state.totalResults;
 
   const filtersBar = document.getElementById('filtersBar');
   if (filtersBar) filtersBar.hidden = !state.all.length;
   const clearBtn = document.getElementById('filtersClear');
-  if (clearBtn) clearBtn.hidden = !(state.selectedSolidites.size || state.selectedDeciles.size);
+  if (clearBtn) clearBtn.hidden = !state.selectedDeciles.size;
 
   renderKPIs(state.filtered);
   renderResults();
@@ -901,13 +897,15 @@ function renderKPIs(data){
 }
 
 /* =========================================================
-   RENDU
+   RENDU PRINCIPAL
    ========================================================= */
 function renderResults(){
   const activeView = document.querySelector('.mode-tab.active')?.dataset.view || 'results';
   const area = document.getElementById('resultsArea'); if (!area) return;
   if (activeView === 'categories'){ renderCategories(); return; }
+  if (activeView === 'map'){ renderMap(); return; }
   if (activeView === 'analytics'){ renderAnalytics(); return; }
+  if (activeView === 'versus'){ renderVersus(); return; }
   if (activeView === 'compare'){ renderCompare(); return; }
   if (activeView === 'quality'){ renderQualityReport(); return; }
 
@@ -930,6 +928,7 @@ function renderResults(){
 
   const cards = slice.map(m => {
     const typeMeta = TYPES_META.find(t=>t.id===m.type) || TYPES_META[3];
+    const simUrl = `${BP_SIM_URL}?insee=${encodeURIComponent(m.insee)}`;
     return `
       <div class="result-card">
         <div class="rc-head">
@@ -953,11 +952,20 @@ function renderResults(){
           ${m.mesures.art34 ? `<span class="tag">art.34 ${fmtEUR(m.mesures.art34)}</span>` : ''}
           ${m.mesures.cnracl ? `<span class="tag">CNRACL ${fmtEUR(m.mesures.cnracl)}</span>` : ''}
         </div>
+        <div style="margin-top:8px">
+          <a href="${escapeHtml(simUrl)}" target="_blank" rel="noopener"
+            style="font-size:11px;color:var(--blue-france);text-decoration:none;font-weight:600">
+            🔗 Voir sur le simulateur BP Avocats →
+          </a>
+        </div>
       </div>`;
   }).join('');
   area.innerHTML = header + cards;
 }
 
+/* =========================================================
+   VUE MESURES
+   ========================================================= */
 function renderCategories(){
   const area = document.getElementById('resultsArea'); if (!area) return;
   const data = state.filtered.length ? state.filtered : state.all;
@@ -994,6 +1002,160 @@ function renderCategories(){
     <div class="cat-grid">${cards}</div>`;
 }
 
+/* =========================================================
+   VUE CARTE
+   ========================================================= */
+function renderMap(){
+  const area = document.getElementById('resultsArea'); if (!area) return;
+  const data = state.filtered.length ? state.filtered : state.all;
+  if (!data.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
+
+  const byDept = {};
+  for (const m of data){
+    if (m.type !== 'commune') continue;
+    let d = String(m.insee || '').slice(0,2);
+    if (d === '97') d = String(m.insee || '').slice(0,3);
+    if (!DEPT_NAMES[d]) continue;
+    if (!byDept[d]) byDept[d] = { count:0, effort:0, habSum:0, habCount:0 };
+    byDept[d].count++;
+    byDept[d].effort += m.effort || 0;
+    if (m.hab > 0){ byDept[d].habSum += m.hab; byDept[d].habCount++; }
+  }
+
+  const maxMetric = Math.max(...Object.values(byDept).map(d => d.habCount ? d.habSum/d.habCount : 0), 1);
+  const CELL = 30, OFFSET = 10;
+  const W = 20 * CELL + OFFSET * 2;
+  const H = 18 * CELL + OFFSET * 2;
+
+  const deptsSvg = DEPT_GRID.map(([code, row, col]) => {
+    const d = byDept[code];
+    const hasData = !!d;
+    const metric = hasData && d.habCount ? d.habSum/d.habCount : 0;
+    const intensity = hasData ? 0.2 + 0.8 * (metric / maxMetric) : 0;
+    const fill = hasData ? `rgba(0,0,145,${intensity.toFixed(2)})` : 'var(--grey-100)';
+    const x = OFFSET + col * CELL;
+    const y = OFFSET + row * CELL;
+    const tooltip = hasData
+      ? `${code} · ${DEPT_NAMES[code]}\n${fmtNum(d.count)} commune(s) · effort/hab moyen ${fmtEUR(metric)}`
+      : `${code} · ${DEPT_NAMES[code]}`;
+    return `<rect class="dept-rect" data-dept="${code}" x="${x}" y="${y}" width="${CELL-2}" height="${CELL-2}"
+      rx="3" ry="3" style="fill:${fill}">
+      <title>${escapeHtml(tooltip)}</title>
+    </rect>
+    <text x="${x + (CELL-2)/2}" y="${y + (CELL-2)/2 + 3}" text-anchor="middle"
+      font-size="9" font-family="monospace" font-weight="700"
+      fill="${hasData ? '#fff' : 'var(--grey-500)'}" pointer-events="none">${code}</text>`;
+  }).join('');
+
+  const topDepts = Object.entries(byDept)
+    .map(([code, d]) => ({ code, ...d, metric: d.habCount ? d.habSum/d.habCount : 0 }))
+    .sort((a,b) => b.metric - a.metric)
+    .slice(0, 30);
+
+  const listHtml = topDepts.map(d => `
+    <div style="display:flex;justify-content:space-between;padding:6px 4px;
+      font-size:11px;font-family:var(--font-mono);border-bottom:1px solid var(--grey-100)">
+      <span style="font-weight:700;color:var(--blue-france);min-width:34px">${d.code}</span>
+      <span style="flex:1;color:var(--grey-700);margin:0 6px;font-size:10px;
+        overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${escapeHtml(DEPT_NAMES[d.code]||'—')}</span>
+      <span style="color:var(--green-bourgeon);font-weight:700;font-size:10px">${fmtEUR(d.metric)}</span>
+    </div>`).join('') || '<div style="text-align:center;color:var(--grey-500);font-size:11px;padding:14px">Aucune donnée communale</div>';
+
+  area.innerHTML = `
+    <div style="margin-bottom:14px;padding:12px 16px;background:var(--bg-panel);border-radius:4px;
+      border-left:4px solid var(--blue-france);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
+      <div>
+        <strong style="color:var(--blue-france);font-size:14px">${Object.keys(byDept).length} département(s)</strong>
+        <span style="color:var(--grey-500);font-size:12px;margin-left:8px">
+          · effort/habitant moyen par département
+        </span>
+      </div>
+      <button id="mapExportBtn" style="background:var(--blue-france);color:#fff;border:none;
+        padding:7px 14px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans)">
+        🖼️ Exporter PNG
+      </button>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 320px;gap:14px;padding:8px">
+      <div id="mapSvgWrap" style="background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;padding:14px">
+        <svg id="mapSvg" viewBox="0 0 ${W} ${H}" style="width:100%;height:auto;display:block;max-height:640px">${deptsSvg}</svg>
+        <div style="display:flex;align-items:center;gap:8px;font-size:11px;color:var(--grey-700);
+          margin-top:10px;justify-content:center;font-family:var(--font-mono)">
+          <span>Faible</span>
+          <div style="width:180px;height:10px;border-radius:2px;
+            background:linear-gradient(90deg,#e3e3fd 0%,#000091 100%);border:1px solid var(--border)"></div>
+          <span>Élevé</span>
+        </div>
+      </div>
+      <div style="background:var(--bg-panel);border:1px solid var(--border);border-radius:6px;
+        padding:14px;max-height:640px;overflow-y:auto">
+        <h4 style="font-size:11px;text-transform:uppercase;color:var(--blue-france);
+          letter-spacing:.6px;font-weight:700;margin-bottom:10px;padding-bottom:6px;
+          border-bottom:1px solid var(--border)">🏆 Top départements (effort/hab)</h4>
+        ${listHtml}
+      </div>
+    </div>`;
+
+  area.querySelectorAll('.dept-rect').forEach(el => {
+    el.addEventListener('click', () => {
+      const code = el.dataset.dept;
+      const qi = document.getElementById('queryInput');
+      if (qi){ qi.value = code; applyFilters(1); }
+    });
+  });
+
+  document.getElementById('mapExportBtn')?.addEventListener('click', exportMapPng);
+}
+
+async function exportMapPng(){
+  const svg = document.getElementById('mapSvg');
+  if (!svg){ toast('Carte introuvable', 'error'); return; }
+  try {
+    const clone = svg.cloneNode(true);
+    // Inline les couleurs CSS (fill utilisés depuis var()/rgba) via getComputedStyle
+    const originalRects = svg.querySelectorAll('.dept-rect');
+    const clonedRects = clone.querySelectorAll('.dept-rect');
+    originalRects.forEach((r, i) => {
+      const cs = getComputedStyle(r);
+      clonedRects[i].setAttribute('fill', cs.fill || '#e5e5e5');
+      clonedRects[i].setAttribute('stroke', '#fff');
+    });
+    const texts = clone.querySelectorAll('text');
+    texts.forEach(t => t.setAttribute('font-family','monospace'));
+
+    const W = svg.viewBox.baseVal.width || 620;
+    const H = svg.viewBox.baseVal.height || 560;
+    const serialized = new XMLSerializer().serializeToString(clone);
+    const svgBlob = new Blob(['<?xml version="1.0" encoding="UTF-8"?>' + serialized], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(svgBlob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = W * scale; canvas.height = H * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#ffffff';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, canvas.width, canvas.height);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'carte-plf2027-effort-hab.png';
+        a.click();
+        toast('🖼️ PNG exporté', 'success');
+      }, 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Erreur export PNG', 'error'); };
+    img.src = url;
+  } catch(e){
+    console.warn(e);
+    toast('Erreur export PNG', 'error');
+  }
+}
+
+/* =========================================================
+   VUE ANALYSES
+   ========================================================= */
 function renderAnalytics(){
   const area = document.getElementById('resultsArea'); if (!area) return;
   const data = state.filtered.length ? state.filtered : state.all;
@@ -1003,6 +1165,9 @@ function renderAnalytics(){
     const k = (TYPES_META.find(t=>t.id===m.type)||{nom:m.type}).nom;
     byType[k] = (byType[k]||0) + (m.effort||0);
   }
+  const byDecile = {};
+  for (const m of data){ if (m.decile !== '—') byDecile[m.decile] = (byDecile[m.decile]||0) + (m.effort||0); }
+
   const bars = (obj, color) => {
     const arr = Object.entries(obj).sort((a,b)=>b[1]-a[1]);
     const max = Math.max(...arr.map(x=>x[1]),1);
@@ -1015,8 +1180,7 @@ function renderAnalytics(){
       </div>`;
     }).join('');
   };
-  const byDecile = {};
-  for (const m of data){ if (m.decile !== '—') byDecile[m.decile] = (byDecile[m.decile]||0) + (m.effort||0); }
+
   area.innerHTML = `
     <div class="analytics-grid">
       <div class="analytics-panel">
@@ -1033,6 +1197,96 @@ function renderAnalytics(){
   });
 }
 
+/* =========================================================
+   VUE A vs B
+   ========================================================= */
+function renderVersus(){
+  const area = document.getElementById('resultsArea'); if (!area) return;
+  if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données pour comparer.</div>'; return; }
+
+  const sorted = [...state.all].sort((a,b)=>b.effort-a.effort);
+  if (!state.versusA) state.versusA = sorted[0]?.id;
+  if (!state.versusB) state.versusB = sorted[1]?.id;
+
+  const optionsA = sorted.slice(0, 500).map(m =>
+    `<option value="${escapeHtml(m.id)}" ${m.id===state.versusA?'selected':''}>${escapeHtml(m.nom)} (${escapeHtml(m.insee)})</option>`).join('');
+  const optionsB = sorted.slice(0, 500).map(m =>
+    `<option value="${escapeHtml(m.id)}" ${m.id===state.versusB?'selected':''}>${escapeHtml(m.nom)} (${escapeHtml(m.insee)})</option>`).join('');
+
+  const A = state.all.find(m => m.id === state.versusA);
+  const B = state.all.find(m => m.id === state.versusB);
+
+  const row = (label, va, vb, fmt = 'eur') => {
+    const f = v => fmt === 'eur' ? fmtEUR(v) : fmt === 'num' ? fmtNum(v) : v;
+    const na = typeof va === 'number' ? va : 0;
+    const nb = typeof vb === 'number' ? vb : 0;
+    const max = Math.max(na, nb, 1);
+    const wA = (na/max)*100;
+    const wB = (nb/max)*100;
+    return `<div style="display:grid;grid-template-columns:140px 1fr 1fr;gap:10px;
+        align-items:center;padding:8px 0;border-bottom:1px solid var(--grey-100);font-size:12px">
+      <div style="font-weight:700;color:var(--grey-700);font-size:11px">${label}</div>
+      <div>
+        <div style="font-family:var(--font-mono);font-weight:700;color:var(--blue-france);font-size:11px;text-align:right">${f(na)}</div>
+        <div style="background:var(--grey-100);height:6px;border-radius:3px;margin-top:3px;overflow:hidden">
+          <div style="width:${wA}%;height:100%;background:var(--blue-france);margin-left:auto"></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:var(--font-mono);font-weight:700;color:var(--red-marianne);font-size:11px">${f(nb)}</div>
+        <div style="background:var(--grey-100);height:6px;border-radius:3px;margin-top:3px;overflow:hidden">
+          <div style="width:${wB}%;height:100%;background:var(--red-marianne)"></div>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const typeMetaA = A ? (TYPES_META.find(t=>t.id===A.type)||TYPES_META[3]) : null;
+  const typeMetaB = B ? (TYPES_META.find(t=>t.id===B.type)||TYPES_META[3]) : null;
+
+  area.innerHTML = `
+    <div class="analytics-panel" style="margin-bottom:14px">
+      <div class="panel-head">🆚 COMPARER DEUX COLLECTIVITÉS</div>
+      <div class="panel-body">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin-bottom:16px">
+          <select id="versusSelectA" class="versus-select" style="border-color:var(--blue-france)">${optionsA}</select>
+          <div style="font-size:22px;color:var(--gold);font-weight:800">⚔️</div>
+          <select id="versusSelectB" class="versus-select" style="border-color:var(--red-marianne)">${optionsB}</select>
+        </div>
+        ${A && B ? `
+          <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:12px">
+            <div style="text-align:left"><strong style="color:var(--blue-france)">${typeMetaA.icon} ${escapeHtml(A.nom)}</strong></div>
+            <div style="text-align:right"><strong style="color:var(--red-marianne)">${escapeHtml(B.nom)} ${typeMetaB.icon}</strong></div>
+          </div>
+          ${row('Effort total', A.effort, B.effort)}
+          ${row('Effort/habitant', A.hab, B.hab)}
+          ${row('Population', A.population, B.population, 'num')}
+          ${row('Art. 37 (contribution)', A.mesures.art37, B.mesures.art37)}
+          ${row('Art. 35 (FCTVA)', A.mesures.art35, B.mesures.art35)}
+          ${row('Art. 36 (TVA)', A.mesures.art36, B.mesures.art36)}
+          ${row('Art. 84 (DILICO)', A.mesures.art84, B.mesures.art84)}
+          ${row('Art. 34 (DTCE)', A.mesures.art34, B.mesures.art34)}
+          ${row('CNRACL', A.mesures.cnracl, B.mesures.cnracl)}
+          <div style="margin-top:16px;padding-top:12px;border-top:2px solid var(--border);
+            display:flex;justify-content:space-between;font-size:12px;font-family:var(--font-mono)">
+            <span style="color:var(--grey-700)">Décile : <strong>D${escapeHtml(A.decile)}</strong></span>
+            <span style="color:var(--grey-700)">Décile : <strong>D${escapeHtml(B.decile)}</strong></span>
+          </div>
+        ` : '<div class="empty">Sélectionnez deux collectivités.</div>'}
+      </div>
+    </div>`;
+
+  document.getElementById('versusSelectA')?.addEventListener('change', e => {
+    state.versusA = e.target.value; renderVersus();
+  });
+  document.getElementById('versusSelectB')?.addEventListener('change', e => {
+    state.versusB = e.target.value; renderVersus();
+  });
+}
+
+/* =========================================================
+   VUE COMPARER TYPES
+   ========================================================= */
 function renderCompare(){
   const area = document.getElementById('resultsArea'); if (!area) return;
   const data = state.filtered.length ? state.filtered : state.all;
@@ -1061,6 +1315,9 @@ function renderCompare(){
   area.innerHTML = `<div class="analytics-grid">${cards}</div>`;
 }
 
+/* =========================================================
+   VUE QUALITÉ
+   ========================================================= */
 function renderQualityReport(){
   const area = document.getElementById('resultsArea'); if (!area) return;
   if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
@@ -1139,9 +1396,9 @@ document.getElementById('btnSelectNone')?.addEventListener('click', () => {
   renderTypesSidebar(); applyFilters(1);
 });
 document.getElementById('filtersClear')?.addEventListener('click', () => {
-  state.selectedSolidites.clear(); state.selectedDeciles.clear();
+  state.selectedDeciles.clear();
   const qi = document.getElementById('queryInput'); if (qi) qi.value = '';
-  populateSolidChips(); populateDecileChips(); applyFilters(1);
+  populateDecileChips(); applyFilters(1);
 });
 document.querySelectorAll('.mode-tab').forEach(t => {
   t.addEventListener('click', () => {
@@ -1179,13 +1436,19 @@ document.getElementById('exportJson')?.addEventListener('click', () => {
   const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'plf2027-export.json'; a.click();
   toast('📥 JSON exporté', 'success');
 });
+document.getElementById('exportPng')?.addEventListener('click', () => {
+  const v = document.querySelector('.mode-tab.active')?.dataset.view;
+  if (v === 'map') exportMapPng();
+  else toast('💡 Passez sur la vue Carte pour exporter en PNG', 'info');
+});
 document.getElementById('clearBtn')?.addEventListener('click', () => {
   state.all = []; state.filtered = [];
-  state.selectedSolidites.clear(); state.selectedDeciles.clear();
+  state.selectedDeciles.clear();
   const qi = document.getElementById('queryInput'); if (qi) qi.value = '';
   safeSet('tbCount', '—'); safeSet('tbMontant', '—');
   document.getElementById('exportCsv').disabled = true;
   document.getElementById('exportJson').disabled = true;
+  document.getElementById('exportPng').disabled = true;
   document.getElementById('filtersBar').hidden = true;
   document.getElementById('paginationBar').hidden = true;
   renderTypesSidebar();
@@ -1210,7 +1473,6 @@ showHelpBanner(
   'info'
 );
 </script>
-
 
 </body>
 </html>
