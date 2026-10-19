@@ -94,6 +94,9 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
 .cancel-btn{background:var(--red-marianne);color:#fff;border:1px solid var(--red-marianne);font-size:13px;font-weight:700;padding:11px 16px;border-radius:4px;cursor:pointer;font-family:var(--font-sans);}
 .cancel-btn[hidden]{display:none}
 
+#yearSelector{display:none;padding:8px 16px;background:var(--bg-panel);border-bottom:1px solid var(--border);align-items:center;gap:6px;flex-wrap:wrap}
+#multiBar{display:none;padding:8px 16px;background:var(--blue-france-soft);border-bottom:1px solid var(--border);align-items:center;gap:10px;flex-wrap:wrap;font-size:12px}
+
 .mode-tabs{display:flex;gap:0;padding:0 10px;border-bottom:1px solid var(--border);background:var(--bg-panel);flex-shrink:0;overflow-x:auto;}
 .mode-tab{background:transparent;border:none;color:var(--grey-700);font-size:12px;font-weight:500;padding:10px 14px;cursor:pointer;transition:all .15s;border-bottom:3px solid transparent;font-family:var(--font-sans);white-space:nowrap;}
 .mode-tab:hover{background:var(--grey-50);color:var(--blue-france)}
@@ -212,11 +215,9 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
 .cat-name{font-size:13px;font-weight:700;color:var(--text);}
 .cat-count-badge{font-family:var(--font-mono);font-size:10px;font-weight:700;background:var(--blue-france);color:#fff;padding:2px 7px;border-radius:3px;}
 
-/* --- Carte --- */
 .dept-rect{stroke:var(--bg-panel);stroke-width:.4;transition:all .2s;cursor:pointer;}
 .dept-rect:hover{filter:brightness(.85);stroke:var(--text);stroke-width:1.5;}
 
-/* --- Versus --- */
 .versus-select{background:var(--bg-panel);border:2px solid var(--border);padding:10px;border-radius:4px;font-size:12px;font-family:var(--font-sans);color:var(--text);width:100%;}
 .versus-select:focus{outline:none;}
 
@@ -289,11 +290,37 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
         <option value="effort_desc">Effort ↓</option>
         <option value="effort_asc">Effort ↑</option>
         <option value="hab_desc">Effort/habitant ↓</option>
-        <option value="rff_desc">Poids RRF ↓</option>
+        <option value="pop_desc">Population ↓</option>
+        <option value="pop_asc">Population ↑</option>
+        <option value="decile_asc">Décile ↑ (D1→D10)</option>
+        <option value="decile_desc">Décile ↓ (D10→D1)</option>
         <option value="nom_asc">Nom A→Z</option>
+      </select>
+      <select id="sortSecondary" title="Tri secondaire">
+        <option value="">Tri 2nd : aucun</option>
+        <option value="effort_desc">2nd : Effort ↓</option>
+        <option value="effort_asc">2nd : Effort ↑</option>
+        <option value="pop_desc">2nd : Population ↓</option>
+        <option value="decile_asc">2nd : Décile ↑</option>
+        <option value="hab_desc">2nd : Effort/hab ↓</option>
+        <option value="nom_asc">2nd : Nom A→Z</option>
       </select>
       <button class="search-btn" id="searchBtn">▶ CHARGER</button>
       <button class="cancel-btn" id="cancelBtn" hidden>✖ ANNULER</button>
+    </div>
+
+    <div id="yearSelector">
+      <strong style="font-size:11px;color:var(--blue-france);text-transform:uppercase;letter-spacing:.5px">📅 Année :</strong>
+      <span id="yearChips" style="display:flex;gap:6px;flex-wrap:wrap"></span>
+    </div>
+
+    <div id="multiBar">
+      <strong style="color:var(--blue-france)" id="multiCount">0 dans le comparateur</strong>
+      <button id="multiCompareBtn" class="search-btn" style="padding:6px 14px;font-size:11px">⚔️ Comparer</button>
+      <button id="multiClearBtn" style="background:var(--red-marianne-soft);color:var(--red-marianne);
+        border:1px solid var(--red-marianne);padding:6px 12px;border-radius:4px;font-size:11px;
+        font-weight:700;cursor:pointer;font-family:var(--font-sans)">✖ Vider</button>
+      <span style="color:var(--grey-700);font-size:11px">Cochez les collectivités pour les comparer (max 8)</span>
     </div>
 
     <div class="mode-tabs">
@@ -301,8 +328,11 @@ body{font-family:var(--font-sans);background:var(--bg-app);color:var(--text);
       <button class="mode-tab" data-view="categories">📂 Mesures</button>
       <button class="mode-tab" data-view="map">🌍 Carte</button>
       <button class="mode-tab" data-view="analytics">📊 Analyses</button>
-      <button class="mode-tab" data-view="versus">🆚 A vs B</button>
+      <button class="mode-tab" data-view="versus">🆚 Comparer (3+)</button>
       <button class="mode-tab" data-view="compare">⚖️ Comparer types</button>
+      <button class="mode-tab" data-view="deptview">📍 Département</button>
+      <button class="mode-tab" data-view="deptvs">🆚 2 Dépts</button>
+      <button class="mode-tab" data-view="deptvsn">🆚 N Dépts</button>
       <button class="mode-tab" data-view="quality">🔍 Qualité</button>
     </div>
 
@@ -490,11 +520,14 @@ const state = {
   theme: localStorage.getItem('plf2027-theme') || 'light',
   abort: null,
   versusIds: [],
-  selectedIds: new Set(),
   selectedDept: null,
   deptSearch: '',
   deptA: null,
-  deptB: null
+  deptB: null,
+  deptN: [],
+  availableYears: [],
+  selectedYear: '2027',
+  loadedFiles: []
 };
 
 /* =========================================================
@@ -539,6 +572,13 @@ function parseCSV(text){
   return { rows, sep };
 }
 
+function detectYearFromFilename(name){
+  if (!name) return null;
+  const m = String(name).match(/\b(20\d{2})\b/);
+  if (m) return m[1];
+  return null;
+}
+
 function detectTypeFromCode(code){
   if (!code) return 'autre';
   const c = String(code).trim();
@@ -548,7 +588,7 @@ function detectTypeFromCode(code){
   return 'autre';
 }
 
-function normalizeRowFromArray(arr){
+function normalizeRowFromArray(arr, year){
   const code = String(arr[0] || '').trim();
   const nom = String(arr[1] || '').trim();
   const typeText = String(arr[2] || '').toLowerCase().trim();
@@ -588,12 +628,13 @@ function normalizeRowFromArray(arr){
   }
 
   return {
-    id: code || nom,
+    id: `${year || '2027'}|${code || nom}`,
     type, nom, insee: code, dept,
     population, effort: effortFinal, hab,
     rff: 0, dgf: 0,
     decile, solidite: '—',
     mesures,
+    year: year || '2027',
     raw: arr
   };
 }
@@ -649,15 +690,19 @@ async function fetchAllCsv(csvRes, signal){
       const text = await r.text();
       const { rows } = parseCSV(text);
       if (rows.length < 1) continue;
+      const year = detectYearFromFilename(res.title) || detectYearFromFilename(res.url) || '2027';
       const firstRowStr = rows[0].join(' ').toLowerCase();
       const hasHeader = /libell|nom|code|insee|effort|montant|départ|type/.test(firstRowStr) && !/^\d/.test(rows[0][0]);
       const startIdx = hasHeader ? 1 : 0;
+      let count = 0;
       for (let i = startIdx; i < rows.length; i++){
         const rrow = rows[i];
         if (!rrow.length || !rrow.some(c => String(c).trim())) continue;
         if (rrow.length < 5) continue;
-        all.push(normalizeRowFromArray(rrow));
+        all.push(normalizeRowFromArray(rrow, year));
+        count++;
       }
+      state.loadedFiles.push({ name: res.title || res.id, year, count });
     } catch(e){ console.warn('CSV KO:', res.title, e); }
   }
   finalizeLoad(all);
@@ -678,21 +723,25 @@ async function handleFiles(files){
   const csvFiles = [...files].filter(f => f.name.endsWith('.csv'));
   if (!csvFiles.length){ alert('Aucun fichier CSV détecté.'); return; }
   showResults(`<div class="loading"><div class="spin"></div>Lecture de ${csvFiles.length} fichier(s)…</div>`);
-  const all = [];
+  const all = [...state.all];
   for (const file of csvFiles){
     try {
       const text = await file.text();
       const { rows } = parseCSV(text);
       if (rows.length < 1) continue;
+      const year = detectYearFromFilename(file.name) || '2027';
       const firstRowStr = rows[0].join(' ').toLowerCase();
       const hasHeader = /libell|nom|code|insee|effort|montant|départ|type/.test(firstRowStr) && !/^\d/.test(rows[0][0]);
       const startIdx = hasHeader ? 1 : 0;
+      let count = 0;
       for (let i = startIdx; i < rows.length; i++){
         const rrow = rows[i];
         if (!rrow.length || !rrow.some(c => String(c).trim())) continue;
         if (rrow.length < 5) continue;
-        all.push(normalizeRowFromArray(rrow));
+        all.push(normalizeRowFromArray(rrow, year));
+        count++;
       }
+      state.loadedFiles.push({ name: file.name, year, count });
     } catch(e){ console.warn(e); }
   }
   state.mode = 'upload';
@@ -712,11 +761,36 @@ function finalizeLoad(rows){
     showResults(`<div class="empty">Aucune donnée exploitable.<br>Vérifiez le format du CSV.</div>`);
     return;
   }
+  state.availableYears = [...new Set(state.all.map(m => m.year))].sort().reverse();
+  if (!state.availableYears.includes(state.selectedYear)){
+    state.selectedYear = state.availableYears[0];
+  }
   updateStats();
   populateDecileChips();
   renderTypesSidebar();
-  toast(`✅ ${fmtNum(state.all.length)} lignes chargées`, 'success');
+  renderYearSelector();
+  toast(`✅ ${fmtNum(state.all.length)} lignes chargées (${state.availableYears.length} année(s))`, 'success');
   applyFilters(1);
+}
+
+function renderYearSelector(){
+  const wrap = document.getElementById('yearSelector');
+  const el = document.getElementById('yearChips');
+  if (!wrap || !el) return;
+  if (state.availableYears.length <= 1){ wrap.style.display = 'none'; return; }
+  wrap.style.display = 'flex';
+  el.innerHTML = state.availableYears.map(y =>
+    `<button class="chip ${y===state.selectedYear?'active':''}" data-year="${y}">📅 ${y}</button>`
+  ).join('');
+  el.querySelectorAll('[data-year]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.selectedYear = btn.dataset.year;
+      renderYearSelector();
+      renderTypesSidebar();
+      populateDecileChips();
+      applyFilters(1);
+    });
+  });
 }
 
 function updateStats(){
@@ -750,7 +824,7 @@ function renderTopRows(){
 }
 
 /* =========================================================
-   SIDEBAR TYPES
+   SIDEBAR
    ========================================================= */
 const TYPES_META = [
   { id:'commune', nom:'Communes', icon:'🏘️', color:'#000091' },
@@ -763,11 +837,11 @@ function renderTypesSidebar(){
   const list = document.getElementById('sbList'); if (!list) return;
   const search = document.getElementById('sourceSearch')?.value.toLowerCase() || '';
   const counts = {};
-  for (const m of state.all) counts[m.type] = (counts[m.type]||0) + 1;
+  for (const m of state.all){ if (m.year === state.selectedYear) counts[m.type] = (counts[m.type]||0) + 1; }
   const filtered = TYPES_META.filter(t => t.nom.toLowerCase().includes(search) && counts[t.id]);
-  safeSet('sbCount', `${state.activeTypes.size} type(s) actif(s)`);
+  safeSet('sbCount', `${state.activeTypes.size} type(s) · ${state.selectedYear}`);
   if (!filtered.length){
-    list.innerHTML = '<div class="loading" style="padding:20px;font-size:11px">Aucun type</div>';
+    list.innerHTML = '<div class="loading" style="padding:20px;font-size:11px">Aucun type pour cette année</div>';
     return;
   }
   list.innerHTML = filtered.map(t => {
@@ -799,7 +873,7 @@ function renderTypesSidebar(){
    ========================================================= */
 function populateDecileChips(){
   const el = document.getElementById('decileChips'); if (!el) return;
-  const deciles = [...new Set(state.all.map(m=>m.decile).filter(d=>d && d!=='—'))].sort((a,b)=>parseInt(a)-parseInt(b));
+  const deciles = [...new Set(state.all.filter(m=>m.year===state.selectedYear).map(m=>m.decile).filter(d=>d && d!=='—'))].sort((a,b)=>parseInt(a)-parseInt(b));
   el.innerHTML = deciles.map(d => {
     const active = state.selectedDeciles.has(d);
     return `<span class="chip ${active?'active':''}" data-decile="${d}">D${escapeHtml(d)}</span>`;
@@ -835,6 +909,7 @@ function applyFilters(page = 1){
   state.currentPage = page;
 
   state.filtered = state.all.filter(m => {
+    if (m.year !== state.selectedYear) return false;
     if (!state.activeTypes.has(m.type)) return false;
     if (state.selectedDeciles.size && !state.selectedDeciles.has(m.decile)) return false;
     if (!q) return true;
@@ -886,7 +961,7 @@ function renderKPIs(data){
   const avgEffort = count ? effort/count : 0;
   const popSum = data.reduce((s,m)=>s+(m.population||0),0);
   const kpis = [
-    { label:'Lignes', value: fmtNum(count), sub:'filtrées', cls:'' },
+    { label:'Lignes', value: fmtNum(count), sub: state.selectedYear, cls:'' },
     { label:'Effort total', value: fmtEUR(effort), sub:'cumulé', cls:'red' },
     { label:'Effort moyen', value: fmtEUR(avgEffort), sub:'par collectivité', cls:'' },
     { label:'Effort/hab moyen', value: fmtEUR(avgHab), sub:'par habitant', cls:'amber' },
@@ -903,19 +978,31 @@ function renderKPIs(data){
 }
 
 /* =========================================================
-   MULTI-SÉLECTION
+   MULTI-SÉLECTION (synchronisée avec versusIds)
    ========================================================= */
 function updateMultiBar(){
   const bar = document.getElementById('multiBar');
   const count = document.getElementById('multiCount');
   if (!bar) return;
-  bar.style.display = state.selectedIds.size > 0 ? 'flex' : 'none';
-  if (count) count.textContent = `${state.selectedIds.size} sélectionnée(s)`;
+  bar.style.display = state.versusIds.length > 0 ? 'flex' : 'none';
+  if (count) count.textContent = `${state.versusIds.length} dans le comparateur`;
 }
-function toggleSelection(id, checked){
-  if (checked) state.selectedIds.add(id);
-  else state.selectedIds.delete(id);
+
+function toggleVersus(id, checked){
+  if (checked){
+    if (!state.versusIds.includes(id) && state.versusIds.length < 8){
+      state.versusIds.push(id);
+      toast(`➕ Ajouté au comparateur (${state.versusIds.length}/8)`, 'success', 1500);
+    } else if (state.versusIds.length >= 8){
+      toast('⚠️ Maximum 8 collectivités', 'error');
+      return false;
+    }
+  } else {
+    state.versusIds = state.versusIds.filter(x => x !== id);
+    toast('➖ Retiré du comparateur', 'info', 1500);
+  }
   updateMultiBar();
+  return true;
 }
 
 /* =========================================================
@@ -931,6 +1018,7 @@ function renderResults(){
   if (activeView === 'compare'){ renderCompare(); return; }
   if (activeView === 'deptview'){ renderDeptView(); return; }
   if (activeView === 'deptvs'){ renderDeptVersus(); return; }
+  if (activeView === 'deptvsn'){ renderDeptVersusN(); return; }
   if (activeView === 'quality'){ renderQualityReport(); return; }
 
   const totalPages = Math.max(1, Math.ceil(state.totalResults / state.pageSize));
@@ -938,7 +1026,7 @@ function renderResults(){
 
   if (!slice.length){
     area.innerHTML = state.all.length
-      ? `<div class="empty">Aucun résultat avec ces filtres.</div>`
+      ? `<div class="empty">Aucun résultat avec ces filtres pour ${state.selectedYear}.</div>`
       : `<div class="empty">Cliquez sur ▶ CHARGER ou glissez un CSV.</div>`;
     return;
   }
@@ -946,19 +1034,20 @@ function renderResults(){
   const header = `
     <div style="font-size:12px;color:var(--grey-700);margin-bottom:12px;padding:10px 14px;
       background:var(--bg-panel);border-radius:4px;border-left:4px solid var(--blue-france)">
-      <strong style="color:var(--blue-france)">${fmtNum(state.totalResults)} ligne(s)</strong>
+      <strong style="color:var(--blue-france)">${fmtNum(state.totalResults)} ligne(s) · ${state.selectedYear}</strong>
       · page ${state.currentPage} / ${totalPages} · affichés ${slice.length}
-      ${state.selectedIds.size ? ` · <span style="color:var(--gold);font-weight:700">${state.selectedIds.size} sélectionnée(s)</span>` : ''}
+      ${state.versusIds.length ? ` · <span style="color:var(--gold);font-weight:700">${state.versusIds.length} dans le comparateur</span>` : ''}
     </div>`;
 
   const cards = slice.map(m => {
     const typeMeta = TYPES_META.find(t=>t.id===m.type) || TYPES_META[3];
     const simUrl = `${BP_SIM_URL}?insee=${encodeURIComponent(m.insee)}`;
-    const isSelected = state.selectedIds.has(m.id);
+    const isSelected = state.versusIds.includes(m.id);
     return `
       <div class="result-card" style="${isSelected ? 'background:var(--blue-france-soft);border-color:var(--blue-france)' : ''}">
         <div class="rc-head">
           <input type="checkbox" data-check-id="${escapeHtml(m.id)}" ${isSelected?'checked':''}
+            title="${isSelected ? 'Retirer du comparateur' : 'Ajouter au comparateur'}"
             style="width:18px;height:18px;cursor:pointer;margin-right:6px;accent-color:var(--blue-france);flex-shrink:0">
           <div class="rc-title">
             ${escapeHtml(m.nom)}
@@ -991,9 +1080,12 @@ function renderResults(){
   }).join('');
   area.innerHTML = header + cards;
 
+  // ⭐ La checkbox alimente directement versusIds
   area.querySelectorAll('[data-check-id]').forEach(cb => {
     cb.addEventListener('change', e => {
-      toggleSelection(cb.dataset.checkId, e.target.checked);
+      const id = cb.dataset.checkId;
+      const ok = toggleVersus(id, e.target.checked);
+      if (ok === false){ e.target.checked = false; return; }
       const card = cb.closest('.result-card');
       if (card){
         card.style.background = e.target.checked ? 'var(--blue-france-soft)' : '';
@@ -1008,7 +1100,7 @@ function renderResults(){
    ========================================================= */
 function renderCategories(){
   const area = document.getElementById('resultsArea'); if (!area) return;
-  const data = state.filtered.length ? state.filtered : state.all;
+  const data = state.filtered.length ? state.filtered : state.all.filter(m=>m.year===state.selectedYear);
   if (!data.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
   const totals = {};
   let grand = 0;
@@ -1034,7 +1126,7 @@ function renderCategories(){
   }).join('');
   area.innerHTML = `
     <div style="margin-bottom:14px;padding:12px 16px;background:var(--bg-panel);border-radius:4px;border-left:4px solid var(--gold)">
-      <strong style="color:var(--blue-france);font-size:14px">6 mesures PLF 2027</strong>
+      <strong style="color:var(--blue-france);font-size:14px">6 mesures PLF ${state.selectedYear}</strong>
       <span style="color:var(--grey-500);font-size:12px;margin-left:8px">
         · ${fmtNum(data.length)} ligne(s) · ${fmtEUR(grand)}
       </span>
@@ -1047,7 +1139,7 @@ function renderCategories(){
    ========================================================= */
 function renderMap(){
   const area = document.getElementById('resultsArea'); if (!area) return;
-  const data = state.filtered.length ? state.filtered : state.all;
+  const data = state.filtered.length ? state.filtered : state.all.filter(m=>m.year===state.selectedYear);
   if (!data.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
 
   const byDept = {};
@@ -1105,7 +1197,7 @@ function renderMap(){
     <div style="margin-bottom:14px;padding:12px 16px;background:var(--bg-panel);border-radius:4px;
       border-left:4px solid var(--blue-france);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
       <div>
-        <strong style="color:var(--blue-france);font-size:14px">${Object.keys(byDept).length} département(s)</strong>
+        <strong style="color:var(--blue-france);font-size:14px">${Object.keys(byDept).length} département(s) · ${state.selectedYear}</strong>
         <span style="color:var(--grey-500);font-size:12px;margin-left:8px">
           · effort/habitant moyen par département
         </span>
@@ -1180,7 +1272,7 @@ async function exportMapPng(){
       canvas.toBlob(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'carte-plf2027-effort-hab.png';
+        a.download = `carte-plf${state.selectedYear}-effort-hab.png`;
         a.click();
         toast('🖼️ PNG exporté', 'success');
       }, 'image/png');
@@ -1198,7 +1290,7 @@ async function exportMapPng(){
    ========================================================= */
 function renderAnalytics(){
   const area = document.getElementById('resultsArea'); if (!area) return;
-  const data = state.filtered.length ? state.filtered : state.all;
+  const data = state.filtered.length ? state.filtered : state.all.filter(m=>m.year===state.selectedYear);
   if (!data.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
   const byType = {};
   for (const m of data){
@@ -1224,11 +1316,11 @@ function renderAnalytics(){
   area.innerHTML = `
     <div class="analytics-grid">
       <div class="analytics-panel">
-        <div class="panel-head">📊 EFFORT PAR TYPE</div>
+        <div class="panel-head">📊 EFFORT PAR TYPE · ${state.selectedYear}</div>
         <div class="panel-body">${bars(byType)}</div>
       </div>
       <div class="analytics-panel">
-        <div class="panel-head">🎯 EFFORT PAR DÉCILE</div>
+        <div class="panel-head">🎯 EFFORT PAR DÉCILE · ${state.selectedYear}</div>
         <div class="panel-body">${bars(byDecile, 'gold')}</div>
       </div>
     </div>`;
@@ -1238,21 +1330,21 @@ function renderAnalytics(){
 }
 
 /* =========================================================
-   VUE A vs B — MULTI
+   VUE COMPARATEUR MULTI (3+)
    ========================================================= */
 function renderVersus(){
   const area = document.getElementById('resultsArea'); if (!area) return;
   if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données pour comparer.</div>'; return; }
 
   const selected = state.versusIds.map(id => state.all.find(m => m.id === id)).filter(Boolean);
-  const sorted = [...state.all].sort((a,b)=>b.effort-a.effort);
-  const options = sorted.slice(0, 1000).map(m =>
+  const pool = state.all.filter(m=>m.year===state.selectedYear).sort((a,b)=>b.effort-a.effort);
+  const options = pool.slice(0, 1000).map(m =>
     `<option value="${escapeHtml(m.id)}">${escapeHtml(m.nom)} (${escapeHtml(m.insee)})</option>`).join('');
   const palette = ['#000091','#E1000F','#00a95f','#ffb800','#a855f7','#06b6d4','#f97316','#6366f1'];
 
   const header = `
     <div class="analytics-panel" style="margin-bottom:14px">
-      <div class="panel-head">🆚 COMPARATEUR MULTI-COLLECTIVITÉS (${selected.length}/8)</div>
+      <div class="panel-head">🆚 COMPARATEUR MULTI · ${state.selectedYear} (${selected.length}/8)</div>
       <div class="panel-body">
         <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
           <select id="versusAddSelect" class="versus-select" style="flex:1;min-width:250px;border-color:var(--blue-france)">
@@ -1265,8 +1357,8 @@ function renderVersus(){
         </div>
         ${!selected.length ? `
           <div style="text-align:center;color:var(--grey-500);padding:24px;font-size:12px">
-            Ajoutez des collectivités via le sélecteur ci-dessus,<br>
-            ou cochez-les dans la vue <strong>📋 Lignes</strong>.
+            Cochez des collectivités dans la vue <strong>📋 Lignes</strong>,<br>
+            ou ajoutez-les via le sélecteur ci-dessus.
           </div>
         ` : ''}
       </div>
@@ -1402,10 +1494,12 @@ function wireVersus(){
     if (state.versusIds.includes(id)){ toast('Déjà dans le comparateur', 'info', 1500); return; }
     if (state.versusIds.length >= 8){ toast('⚠️ Maximum 8 collectivités', 'error'); return; }
     state.versusIds.push(id);
+    updateMultiBar();
     renderVersus();
   });
   document.getElementById('versusClearBtn')?.addEventListener('click', () => {
     state.versusIds = [];
+    updateMultiBar();
     renderVersus();
   });
   document.getElementById('versusExportPng')?.addEventListener('click', exportVersusPng);
@@ -1413,6 +1507,7 @@ function wireVersus(){
     btn.addEventListener('click', () => {
       const id = btn.dataset.removeVersus;
       state.versusIds = state.versusIds.filter(x => x !== id);
+      updateMultiBar();
       renderVersus();
     });
   });
@@ -1463,7 +1558,7 @@ async function exportVersusPng(){
       canvas.toBlob(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = 'comparatif-plf2027.png';
+        a.download = `comparatif-plf${state.selectedYear}.png`;
         a.click();
         toast('🖼️ PNG comparatif exporté', 'success');
       }, 'image/png');
@@ -1477,12 +1572,12 @@ async function exportVersusPng(){
 }
 
 /* =========================================================
-   VUE DÉPARTEMENT (avec recherche + export PNG)
+   VUE DÉPARTEMENT
    ========================================================= */
 function getDeptsMap(){
   const deptsMap = {};
   for (const m of state.all){
-    if (m.type !== 'commune' || m.dept === '—') continue;
+    if (m.year !== state.selectedYear || m.type !== 'commune' || m.dept === '—') continue;
     if (!deptsMap[m.dept]) deptsMap[m.dept] = { count:0, effort:0, habSum:0, habCount:0 };
     deptsMap[m.dept].count++;
     deptsMap[m.dept].effort += m.effort || 0;
@@ -1495,7 +1590,7 @@ function getDeptsMap(){
 
 function getCommunesOfDept(deptCode){
   return state.all
-    .filter(m => m.type === 'commune' && m.dept === deptCode)
+    .filter(m => m.year === state.selectedYear && m.type === 'commune' && m.dept === deptCode)
     .sort((a,b) => b.effort - a.effort);
 }
 
@@ -1505,16 +1600,17 @@ function renderDeptView(){
 
   const depts = getDeptsMap();
   if (!depts.length){
-    area.innerHTML = '<div class="empty">Aucune commune avec département détecté.<br>Chargez le CSV des communes.</div>';
+    area.innerHTML = `<div class="empty">Aucune commune pour ${state.selectedYear}.<br>Chargez le CSV des communes de cette année.</div>`;
     return;
   }
 
-  if (!state.selectedDept) state.selectedDept = depts[0].code;
+  if (!state.selectedDept || !depts.find(d => d.code === state.selectedDept)){
+    state.selectedDept = depts[0].code;
+  }
   const currentDept = state.selectedDept;
   const communes = getCommunesOfDept(currentDept);
   const deptMeta = depts.find(d => d.code === currentDept);
 
-  // ⭐ Recherche par nom de département
   const search = state.deptSearch.toLowerCase().trim();
   const filteredDepts = search
     ? depts.filter(d => d.code.toLowerCase().includes(search) || d.name.toLowerCase().includes(search))
@@ -1554,7 +1650,7 @@ function renderDeptView(){
     <div style="margin-bottom:14px;padding:12px 16px;background:var(--bg-panel);border-radius:4px;
       border-left:4px solid var(--gold);display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between">
       <div>
-        <strong style="color:var(--blue-france);font-size:14px">📍 Comparaison département</strong>
+        <strong style="color:var(--blue-france);font-size:14px">📍 Département · ${state.selectedYear}</strong>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <input type="text" id="deptSearchInput" placeholder="🔍 Rechercher un département…"
@@ -1618,12 +1714,10 @@ function renderDeptView(){
     area.querySelectorAll('.anim-bar').forEach(b => { b.style.width = b.dataset.w; });
   });
 
-  // ⭐ Recherche département
   const searchInput = document.getElementById('deptSearchInput');
   if (searchInput){
     searchInput.addEventListener('input', (e) => {
       state.deptSearch = e.target.value;
-      // Re-render juste le select sans perdre le focus
       const sel = document.getElementById('deptSelect');
       if (!sel) return;
       const filtered = getDeptsMap().filter(d =>
@@ -1647,6 +1741,7 @@ function renderDeptView(){
       toast('⚠️ Pas assez de communes pour comparer', 'error');
       return;
     }
+    updateMultiBar();
     document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
     document.querySelector('[data-view="versus"]')?.classList.add('active');
     renderVersus();
@@ -1700,7 +1795,7 @@ async function exportDeptPng(){
       canvas.toBlob(blob => {
         const a = document.createElement('a');
         a.href = URL.createObjectURL(blob);
-        a.download = `dept-${state.selectedDept}-plf2027.png`;
+        a.download = `dept-${state.selectedDept}-plf${state.selectedYear}.png`;
         a.click();
         toast('🖼️ PNG département exporté', 'success');
       }, 'image/png');
@@ -1714,7 +1809,7 @@ async function exportDeptPng(){
 }
 
 /* =========================================================
-   VUE 2 DÉPARTEMENTS CÔTE À CÔTE
+   VUE 2 DÉPARTEMENTS
    ========================================================= */
 function renderDeptVersus(){
   const area = document.getElementById('resultsArea'); if (!area) return;
@@ -1755,7 +1850,6 @@ function renderDeptVersus(){
     const wA = (na/max)*100;
     const wB = (nb/max)*100;
     const cmp = na === nb ? '=' : na > nb ? '▲' : '▼';
-    const cls = na === nb ? 'neu' : na > nb ? 'pos' : 'neg';
     return `<div style="display:grid;grid-template-columns:140px 1fr 1fr;gap:10px;
         align-items:center;padding:8px 0;border-bottom:1px solid var(--grey-100);font-size:12px">
       <div style="font-weight:700;color:var(--grey-700);font-size:11px">${label}</div>
@@ -1782,7 +1876,7 @@ function renderDeptVersus(){
 
   area.innerHTML = `
     <div class="analytics-panel" style="margin-bottom:14px">
-      <div class="panel-head">🆚 COMPARAISON DE 2 DÉPARTEMENTS</div>
+      <div class="panel-head">🆚 COMPARAISON DE 2 DÉPARTEMENTS · ${state.selectedYear}</div>
       <div class="panel-body">
         <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin-bottom:16px">
           <select id="deptSelA" class="versus-select" style="border-color:var(--blue-france)">${deptOptions(state.deptA)}</select>
@@ -1834,11 +1928,237 @@ function renderDeptVersus(){
 }
 
 /* =========================================================
+   VUE N DÉPARTEMENTS
+   ========================================================= */
+function renderDeptVersusN(){
+  const area = document.getElementById('resultsArea'); if (!area) return;
+  if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
+
+  const depts = getDeptsMap();
+  if (depts.length < 2){
+    area.innerHTML = '<div class="empty">Il faut au moins 2 départements avec des communes.</div>';
+    return;
+  }
+
+  if (!state.deptN.length){
+    state.deptN = depts.slice(0, Math.min(3, depts.length)).map(d => d.code);
+  }
+  state.deptN = state.deptN.filter(code => depts.find(d => d.code === code));
+  if (!state.deptN.length) state.deptN = [depts[0].code];
+
+  const palette = ['#000091','#E1000F','#00a95f','#ffb800','#a855f7','#06b6d4','#f97316','#6366f1','#ec4899','#14b8a6'];
+
+  const deptOptions = depts.map(d =>
+    `<option value="${d.code}" ${state.deptN.includes(d.code)?'selected':''}>${d.code} · ${escapeHtml(d.name)} (${d.count})</option>`
+  ).join('');
+
+  const stats = state.deptN.map(code => {
+    const meta = depts.find(d => d.code === code);
+    const communes = getCommunesOfDept(code);
+    const avgHab = communes.length ? communes.reduce((s,m)=>s+(m.hab||0),0)/communes.length : 0;
+    const totalPop = communes.reduce((s,m)=>s+(m.population||0),0);
+    return { code, meta, communes, avgHab, totalPop };
+  });
+
+  const cards = stats.map((s, i) => {
+    const color = palette[i % palette.length];
+    return `<div style="background:var(--bg-panel);border:1px solid ${color};border-top:4px solid ${color};
+      border-radius:6px;padding:12px;position:relative">
+      <button data-remove-deptn="${s.code}" title="Retirer"
+        style="position:absolute;top:6px;right:8px;background:transparent;border:none;
+        color:${color};font-size:16px;cursor:pointer;font-weight:700">×</button>
+      <div style="font-size:13px;font-weight:700;color:${color};margin-bottom:4px;padding-right:18px">
+        ${s.code} · ${escapeHtml(s.meta.name)}
+      </div>
+      <div style="font-family:var(--font-mono);font-size:10px;color:var(--grey-500)">
+        ${fmtNum(s.meta.count)} communes
+      </div>
+      <div style="margin-top:8px;font-family:var(--font-mono);font-size:14px;font-weight:800;color:${color}">
+        ${fmtEUR(s.meta.effort)}
+      </div>
+      <div style="font-size:10px;color:var(--grey-500);font-family:var(--font-mono)">
+        ${fmtEUR(s.avgHab)}/hab moyen · ${fmtNum(s.totalPop)} hab.
+      </div>
+    </div>`;
+  }).join('');
+
+  const metrics = [
+    { label:'Communes', get: s => s.meta.count, fmt: v => fmtNum(v) },
+    { label:'Effort total', get: s => s.meta.effort, fmt: v => fmtEUR(v) },
+    { label:'Effort/hab moyen', get: s => s.avgHab, fmt: v => fmtEUR(v) },
+    { label:'Population', get: s => s.totalPop, fmt: v => fmtNum(v) },
+    { label:'Effort/hab (métrique)', get: s => s.meta.metric, fmt: v => fmtEUR(v) }
+  ];
+
+  const tableRows = metrics.map(met => {
+    const values = stats.map(s => met.get(s));
+    const nums = values.filter(v => typeof v === 'number');
+    const max = nums.length ? Math.max(...nums, 1) : 1;
+    const cells = stats.map((s, i) => {
+      const v = values[i];
+      const color = palette[i % palette.length];
+      const isNum = typeof v === 'number';
+      const w = isNum && v > 0 ? (v / max) * 100 : 0;
+      return `<td style="padding:6px 8px;text-align:right;font-family:var(--font-mono);font-size:11px;
+          border-bottom:1px solid var(--grey-100);position:relative">
+        <div style="font-weight:700;color:${isNum ? color : 'var(--text)'}">${met.fmt(v)}</div>
+        ${isNum && v > 0 ? `<div style="background:${color};opacity:.15;height:3px;border-radius:2px;margin-top:3px">
+          <div style="width:${w}%;height:100%;background:${color};border-radius:2px"></div></div>` : ''}
+      </td>`;
+    }).join('');
+    return `<tr>
+      <td style="padding:6px 8px;font-size:11px;font-weight:700;color:var(--grey-700);
+          border-bottom:1px solid var(--grey-100);white-space:nowrap">${met.label}</td>
+      ${cells}
+    </tr>`;
+  }).join('');
+
+  const tableHead = stats.map((s, i) => `
+    <th style="padding:8px;text-align:right;font-size:10px;font-weight:700;
+        color:${palette[i % palette.length]};border-bottom:2px solid var(--border);
+        font-family:var(--font-mono)">${s.code}</th>`).join('');
+
+  const top5Grid = stats.map((s, i) => {
+    const color = palette[i % palette.length];
+    const top5 = s.communes.slice(0,5);
+    return `<div class="analytics-panel">
+      <div class="panel-head" style="color:${color}">🏆 Top 5 · ${s.code}</div>
+      <div class="panel-body">
+        ${top5.map((m,j) => `
+          <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--grey-100);font-size:11px">
+            <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${j+1}. ${escapeHtml(m.nom)}</span>
+            <span style="font-family:var(--font-mono);font-weight:700;color:${color};margin-left:6px">${fmtEUR(m.effort)}</span>
+          </div>`).join('')}
+      </div>
+    </div>`;
+  }).join('');
+
+  area.innerHTML = `
+    <div class="analytics-panel" style="margin-bottom:14px">
+      <div class="panel-head">🆚 COMPARAISON N DÉPARTEMENTS · ${state.selectedYear} (${stats.length}/6)</div>
+      <div class="panel-body">
+        <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin-bottom:14px">
+          <select id="deptNAdd" class="versus-select" style="flex:1;min-width:250px;border-color:var(--blue-france)">
+            <option value="">— Ajouter un département —</option>
+            ${deptOptions}
+          </select>
+          <button id="deptNAddBtn" class="search-btn" style="padding:9px 16px">➕ Ajouter</button>
+          <button id="deptNClearBtn" style="background:var(--red-marianne-soft);color:var(--red-marianne);border:1px solid var(--red-marianne);padding:9px 14px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans)">✖ Tout retirer</button>
+          ${stats.length >= 2 ? `<button id="deptNExportPng" style="background:var(--green-bourgeon);color:#fff;border:none;padding:9px 14px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans)">🖼️ PNG</button>` : ''}
+        </div>
+      </div>
+    </div>
+
+    <div id="deptNCapture" style="background:var(--bg-app);padding:14px">
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px">
+        ${cards}
+      </div>
+
+      <div class="analytics-panel" style="margin-bottom:14px">
+        <div class="panel-head">📊 TABLEAU COMPARATIF</div>
+        <div class="panel-body" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr>
+              <th style="padding:8px;text-align:left;font-size:10px;color:var(--grey-700);
+                border-bottom:2px solid var(--border)">Métrique</th>
+              ${tableHead}
+            </tr></thead>
+            <tbody>${tableRows}</tbody>
+          </table>
+        </div>
+      </div>
+
+      <div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:10px">
+        ${top5Grid}
+      </div>
+    </div>`;
+
+  document.getElementById('deptNAddBtn')?.addEventListener('click', () => {
+    const sel = document.getElementById('deptNAdd');
+    const code = sel?.value;
+    if (!code) return;
+    if (state.deptN.includes(code)){ toast('Déjà dans la comparaison', 'info', 1500); return; }
+    if (state.deptN.length >= 6){ toast('⚠️ Maximum 6 départements', 'error'); return; }
+    state.deptN.push(code);
+    renderDeptVersusN();
+  });
+  document.getElementById('deptNClearBtn')?.addEventListener('click', () => {
+    state.deptN = [];
+    renderDeptVersusN();
+  });
+  document.getElementById('deptNExportPng')?.addEventListener('click', exportDeptNPng);
+  document.querySelectorAll('[data-remove-deptn]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      state.deptN = state.deptN.filter(c => c !== btn.dataset.removeDeptn);
+      renderDeptVersusN();
+    });
+  });
+}
+
+async function exportDeptNPng(){
+  const target = document.getElementById('deptNCapture');
+  if (!target){ toast('Rien à exporter', 'error'); return; }
+  try {
+    const rect = target.getBoundingClientRect();
+    const W = Math.ceil(rect.width);
+    const H = Math.ceil(rect.height);
+    const clone = target.cloneNode(true);
+    clone.querySelectorAll('button').forEach(b => b.remove());
+
+    const styles = Array.from(document.styleSheets)
+      .map(ss => {
+        try { return Array.from(ss.cssRules).map(r => r.cssText).join('\n'); }
+        catch(e){ return ''; }
+      }).join('\n');
+
+    const html = `
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:${W}px;background:#f6f6f6">
+        <style>${styles}</style>
+        <div style="padding:20px;font-family:'Marianne',system-ui,sans-serif">
+          ${clone.outerHTML}
+        </div>
+      </div>`;
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+        <foreignObject width="100%" height="100%">${html}</foreignObject>
+      </svg>`;
+
+    const blob = new Blob([svg], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = W * scale;
+      canvas.height = H * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#f6f6f6';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `depts-N-plf${state.selectedYear}.png`;
+        a.click();
+        toast('🖼️ PNG N départements exporté', 'success');
+      }, 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Erreur export PNG', 'error'); };
+    img.src = url;
+  } catch(e){
+    console.warn(e);
+    toast('Erreur export PNG', 'error');
+  }
+}
+
+/* =========================================================
    VUE COMPARER TYPES
    ========================================================= */
 function renderCompare(){
   const area = document.getElementById('resultsArea'); if (!area) return;
-  const data = state.filtered.length ? state.filtered : state.all;
+  const data = state.filtered.length ? state.filtered : state.all.filter(m=>m.year===state.selectedYear);
   if (!data.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
   const statsByType = {};
   for (const m of data){
@@ -1870,10 +2190,11 @@ function renderCompare(){
 function renderQualityReport(){
   const area = document.getElementById('resultsArea'); if (!area) return;
   if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
+  const data = state.all.filter(m=>m.year===state.selectedYear);
   const byDecile = {};
-  for (const m of state.all){ if (m.decile !== '—') byDecile[m.decile] = (byDecile[m.decile]||0)+1; }
+  for (const m of data){ if (m.decile !== '—') byDecile[m.decile] = (byDecile[m.decile]||0)+1; }
   const rows = Object.entries(byDecile).sort((a,b)=>parseInt(a[0])-parseInt(b[0])).map(([d,c]) => {
-    const pct = (c/state.all.length)*100;
+    const pct = (c/data.length)*100;
     return `<div class="bar-row">
       <div class="name">Décile ${escapeHtml(d)}</div>
       <div class="bar-track"><div class="bar-fill green anim-bar" style="width:0" data-w="${pct}%"></div></div>
@@ -1882,7 +2203,7 @@ function renderQualityReport(){
   }).join('');
   area.innerHTML = `
     <div class="analytics-panel">
-      <div class="panel-head">🔍 RÉPARTITION PAR DÉCILE</div>
+      <div class="panel-head">🔍 RÉPARTITION PAR DÉCILE · ${state.selectedYear}</div>
       <div class="panel-body">${rows}</div>
     </div>`;
   requestAnimationFrame(() => {
@@ -1951,15 +2272,14 @@ document.getElementById('filtersClear')?.addEventListener('click', () => {
   populateDecileChips(); applyFilters(1);
 });
 document.getElementById('multiCompareBtn')?.addEventListener('click', () => {
-  if (state.selectedIds.size < 2){ toast('⚠️ Sélectionnez au moins 2 collectivités', 'error'); return; }
-  state.versusIds = [...state.selectedIds].slice(0, 8);
+  if (state.versusIds.length < 2){ toast('⚠️ Sélectionnez au moins 2 collectivités', 'error'); return; }
   document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
   document.querySelector('[data-view="versus"]')?.classList.add('active');
   renderVersus();
   toast(`⚔️ ${state.versusIds.length} collectivités comparées`, 'success');
 });
 document.getElementById('multiClearBtn')?.addEventListener('click', () => {
-  state.selectedIds.clear();
+  state.versusIds = [];
   updateMultiBar();
   renderResults();
 });
@@ -1982,21 +2302,21 @@ document.getElementById('pageSizeSelect')?.addEventListener('change', e => {
   state.pageSize = parseInt(e.target.value); applyFilters(1);
 });
 document.getElementById('exportCsv')?.addEventListener('click', () => {
-  const cols = ['type','nom','insee','dept','population','effort','hab','decile','art37','art35','art36','art84','art34','cnracl'];
+  const cols = ['year','type','nom','insee','dept','population','effort','hab','decile','art37','art35','art36','art84','art34','cnracl'];
   const esc = v => `"${String(v??'').replace(/"/g,'""')}"`;
   const rows = [cols.join(',')];
   for (const m of state.filtered){
-    rows.push([m.type, m.nom, m.insee, m.dept, m.population, m.effort, m.hab, m.decile,
+    rows.push([m.year, m.type, m.nom, m.insee, m.dept, m.population, m.effort, m.hab, m.decile,
       m.mesures.art37, m.mesures.art35, m.mesures.art36, m.mesures.art84, m.mesures.art34, m.mesures.cnracl]
       .map(esc).join(','));
   }
   const blob = new Blob(['\ufeff' + rows.join('\n')], {type:'text/csv;charset=utf-8'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'plf2027-export.csv'; a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `plf${state.selectedYear}-export.csv`; a.click();
   toast('📥 CSV exporté', 'success');
 });
 document.getElementById('exportJson')?.addEventListener('click', () => {
   const blob = new Blob([JSON.stringify(state.filtered, null, 2)], {type:'application/json'});
-  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = 'plf2027-export.json'; a.click();
+  const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `plf${state.selectedYear}-export.json`; a.click();
   toast('📥 JSON exporté', 'success');
 });
 document.getElementById('exportPng')?.addEventListener('click', () => {
@@ -2004,17 +2324,20 @@ document.getElementById('exportPng')?.addEventListener('click', () => {
   if (v === 'map') exportMapPng();
   else if (v === 'versus') exportVersusPng();
   else if (v === 'deptview') exportDeptPng();
-  else toast('💡 PNG disponible sur : Carte, Comparer, Département', 'info');
+  else if (v === 'deptvsn') exportDeptNPng();
+  else toast('💡 PNG disponible sur : Carte, Comparer, Département, N Dépts', 'info');
 });
 document.getElementById('clearBtn')?.addEventListener('click', () => {
   state.all = []; state.filtered = [];
   state.selectedDeciles.clear();
   state.versusIds = [];
-  state.selectedIds.clear();
   state.selectedDept = null;
   state.deptA = null;
   state.deptB = null;
+  state.deptN = [];
   state.deptSearch = '';
+  state.availableYears = [];
+  state.loadedFiles = [];
   const qi = document.getElementById('queryInput'); if (qi) qi.value = '';
   safeSet('tbCount', '—'); safeSet('tbMontant', '—');
   document.getElementById('exportCsv').disabled = true;
@@ -2024,6 +2347,8 @@ document.getElementById('clearBtn')?.addEventListener('click', () => {
   document.getElementById('paginationBar').hidden = true;
   updateMultiBar();
   renderTypesSidebar();
+  const ySel = document.getElementById('yearSelector');
+  if (ySel) ySel.style.display = 'none';
   showResults(`<div class="empty">Cliquez sur ▶ CHARGER ou glissez un CSV.</div>`);
   toast('🗑️ Données effacées', 'info');
 });
@@ -2041,7 +2366,7 @@ renderTypesSidebar();
 safeSet('tbMode', 'INIT', 'val amber');
 safeSet('ivStatus', '● PRÊT', 'v amber');
 showHelpBanner(
-  '💡 <strong>Pour démarrer</strong> : cliquez sur <strong>▶ CHARGER</strong> pour interroger l\'API data.gouv.fr, ou glissez directement un des 3 CSV dans la zone à gauche.',
+  '💡 <strong>Pour démarrer</strong> : cliquez sur <strong>▶ CHARGER</strong> pour interroger l\'API data.gouv.fr, ou glissez directement des CSV (2025, 2026, 2027…).<br>Cochez les collectivités dans <strong>📋 Lignes</strong> pour les ajouter au comparateur.',
   'info'
 );
 </script>
