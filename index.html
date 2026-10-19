@@ -407,9 +407,6 @@ const SIX_MESURES = [
   { key:'cnracl', label:'Hausse CNRACL', color:'#06b6d4' }
 ];
 
-/* =========================================================
-   CARTE — NOMS + GRILLE DÉPARTEMENTS
-   ========================================================= */
 const DEPT_NAMES = {
   '01':'Ain','02':'Aisne','03':'Allier','04':'Alpes-de-Haute-Provence','05':'Hautes-Alpes',
   '06':'Alpes-Maritimes','07':'Ardèche','08':'Ardennes','09':'Ariège','10':'Aube',
@@ -493,7 +490,11 @@ const state = {
   theme: localStorage.getItem('plf2027-theme') || 'light',
   abort: null,
   versusIds: [],
-  selectedIds: new Set()   // ⭐ multi-sélection par checkbox
+  selectedIds: new Set(),
+  selectedDept: null,
+  deptSearch: '',
+  deptA: null,
+  deptB: null
 };
 
 /* =========================================================
@@ -578,7 +579,6 @@ function normalizeRowFromArray(arr){
   const effortCalc = Object.values(mesures).reduce((s,v)=>s+v,0);
   const effortFinal = effort || effortCalc;
 
-  // Extraction du département pour les communes (2 premiers chiffres INSEE)
   let dept = '—';
   if (type === 'commune'){
     dept = code.slice(0,2);
@@ -814,9 +814,6 @@ function populateDecileChips(){
   });
 }
 
-/* =========================================================
-   TRI PRIMAIRE + SECONDAIRE
-   ========================================================= */
 function compareByKey(a, b, key){
   switch(key){
     case 'effort_desc': return (b.effort||0)-(a.effort||0);
@@ -845,7 +842,6 @@ function applyFilters(page = 1){
     return hay.includes(q);
   });
 
-  // ⭐ Tri primaire + secondaire
   state.filtered.sort((a,b) => {
     const c1 = compareByKey(a, b, sortPrimary);
     if (c1 !== 0) return c1;
@@ -916,7 +912,6 @@ function updateMultiBar(){
   bar.style.display = state.selectedIds.size > 0 ? 'flex' : 'none';
   if (count) count.textContent = `${state.selectedIds.size} sélectionnée(s)`;
 }
-
 function toggleSelection(id, checked){
   if (checked) state.selectedIds.add(id);
   else state.selectedIds.delete(id);
@@ -935,6 +930,7 @@ function renderResults(){
   if (activeView === 'versus'){ renderVersus(); return; }
   if (activeView === 'compare'){ renderCompare(); return; }
   if (activeView === 'deptview'){ renderDeptView(); return; }
+  if (activeView === 'deptvs'){ renderDeptVersus(); return; }
   if (activeView === 'quality'){ renderQualityReport(); return; }
 
   const totalPages = Math.max(1, Math.ceil(state.totalResults / state.pageSize));
@@ -995,11 +991,9 @@ function renderResults(){
   }).join('');
   area.innerHTML = header + cards;
 
-  // Checkboxes
   area.querySelectorAll('[data-check-id]').forEach(cb => {
     cb.addEventListener('change', e => {
       toggleSelection(cb.dataset.checkId, e.target.checked);
-      // Met à jour visuellement la carte
       const card = cb.closest('.result-card');
       if (card){
         card.style.background = e.target.checked ? 'var(--blue-france-soft)' : '';
@@ -1144,8 +1138,10 @@ function renderMap(){
   area.querySelectorAll('.dept-rect').forEach(el => {
     el.addEventListener('click', () => {
       const code = el.dataset.dept;
-      const qi = document.getElementById('queryInput');
-      if (qi){ qi.value = code; applyFilters(1); }
+      state.selectedDept = code;
+      document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
+      document.querySelector('[data-view="deptview"]')?.classList.add('active');
+      renderDeptView();
     });
   });
 
@@ -1242,20 +1238,16 @@ function renderAnalytics(){
 }
 
 /* =========================================================
-   VUE A vs B — MULTI (3+)
+   VUE A vs B — MULTI
    ========================================================= */
 function renderVersus(){
   const area = document.getElementById('resultsArea'); if (!area) return;
   if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données pour comparer.</div>'; return; }
 
-  const selected = state.versusIds
-    .map(id => state.all.find(m => m.id === id))
-    .filter(Boolean);
-
+  const selected = state.versusIds.map(id => state.all.find(m => m.id === id)).filter(Boolean);
   const sorted = [...state.all].sort((a,b)=>b.effort-a.effort);
   const options = sorted.slice(0, 1000).map(m =>
     `<option value="${escapeHtml(m.id)}">${escapeHtml(m.nom)} (${escapeHtml(m.insee)})</option>`).join('');
-
   const palette = ['#000091','#E1000F','#00a95f','#ffb800','#a855f7','#06b6d4','#f97316','#6366f1'];
 
   const header = `
@@ -1283,18 +1275,18 @@ function renderVersus(){
   if (!selected.length){ area.innerHTML = header; wireVersus(); return; }
 
   const metrics = [
-    { label:'Type', get: m => (TYPES_META.find(t=>t.id===m.type)||{icon:'',nom:m.type}).nom, fmt: v => v },
+    { label:'Type', get: m => (TYPES_META.find(t=>t.id===m.type)||{nom:m.type}).nom, fmt: v => v },
     { label:'Code INSEE', get: m => m.insee, fmt: v => v },
     { label:'Département', get: m => m.dept, fmt: v => v },
     { label:'Population', get: m => m.population, fmt: v => fmtNum(v) },
     { label:'Décile', get: m => 'D' + m.decile, fmt: v => v },
     { label:'Effort total', get: m => m.effort, fmt: v => fmtEUR(v) },
     { label:'Effort/habitant', get: m => m.hab, fmt: v => fmtEUR(v) },
-    { label:'Art. 37 (contribution)', get: m => m.mesures.art37, fmt: v => fmtEUR(v) },
-    { label:'Art. 35 (FCTVA)', get: m => m.mesures.art35, fmt: v => fmtEUR(v) },
-    { label:'Art. 36 (TVA)', get: m => m.mesures.art36, fmt: v => fmtEUR(v) },
-    { label:'Art. 84 (DILICO)', get: m => m.mesures.art84, fmt: v => fmtEUR(v) },
-    { label:'Art. 34 (DTCE)', get: m => m.mesures.art34, fmt: v => fmtEUR(v) },
+    { label:'Art. 37', get: m => m.mesures.art37, fmt: v => fmtEUR(v) },
+    { label:'Art. 35', get: m => m.mesures.art35, fmt: v => fmtEUR(v) },
+    { label:'Art. 36', get: m => m.mesures.art36, fmt: v => fmtEUR(v) },
+    { label:'Art. 84', get: m => m.mesures.art84, fmt: v => fmtEUR(v) },
+    { label:'Art. 34', get: m => m.mesures.art34, fmt: v => fmtEUR(v) },
     { label:'CNRACL', get: m => m.mesures.cnracl, fmt: v => fmtEUR(v) }
   ];
 
@@ -1430,12 +1422,10 @@ async function exportVersusPng(){
   const target = document.getElementById('versusCapture');
   if (!target){ toast('Rien à exporter', 'error'); return; }
   try {
-    // Utilise SVG foreignObject pour rasteriser le HTML
     const rect = target.getBoundingClientRect();
     const W = Math.ceil(rect.width);
     const H = Math.ceil(rect.height);
     const clone = target.cloneNode(true);
-    // Retire les boutons d'action pour l'export
     clone.querySelectorAll('button').forEach(b => b.remove());
 
     const styles = Array.from(document.styleSheets)
@@ -1452,8 +1442,7 @@ async function exportVersusPng(){
         </div>
       </div>`;
 
-    const svg = `
-      <svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
         <foreignObject width="100%" height="100%">${html}</foreignObject>
       </svg>`;
 
@@ -1479,7 +1468,7 @@ async function exportVersusPng(){
         toast('🖼️ PNG comparatif exporté', 'success');
       }, 'image/png');
     };
-    img.onerror = () => { URL.revokeObjectURL(url); toast('Erreur export PNG (CORS ou polices)', 'error'); };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Erreur export PNG', 'error'); };
     img.src = url;
   } catch(e){
     console.warn(e);
@@ -1488,13 +1477,9 @@ async function exportVersusPng(){
 }
 
 /* =========================================================
-   VUE DÉPARTEMENT — toutes les communes d'un dépt
+   VUE DÉPARTEMENT (avec recherche + export PNG)
    ========================================================= */
-function renderDeptView(){
-  const area = document.getElementById('resultsArea'); if (!area) return;
-  if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
-
-  // Départements disponibles (communes uniquement)
+function getDeptsMap(){
   const deptsMap = {};
   for (const m of state.all){
     if (m.type !== 'commune' || m.dept === '—') continue;
@@ -1503,37 +1488,47 @@ function renderDeptView(){
     deptsMap[m.dept].effort += m.effort || 0;
     if (m.hab > 0){ deptsMap[m.dept].habSum += m.hab; deptsMap[m.dept].habCount++; }
   }
-  const depts = Object.entries(deptsMap)
+  return Object.entries(deptsMap)
     .map(([code, d]) => ({ code, ...d, name: DEPT_NAMES[code] || code, metric: d.habCount ? d.habSum/d.habCount : 0 }))
     .sort((a,b) => a.code.localeCompare(b.code));
+}
 
+function getCommunesOfDept(deptCode){
+  return state.all
+    .filter(m => m.type === 'commune' && m.dept === deptCode)
+    .sort((a,b) => b.effort - a.effort);
+}
+
+function renderDeptView(){
+  const area = document.getElementById('resultsArea'); if (!area) return;
+  if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
+
+  const depts = getDeptsMap();
   if (!depts.length){
     area.innerHTML = '<div class="empty">Aucune commune avec département détecté.<br>Chargez le CSV des communes.</div>';
     return;
   }
 
-  // Sélection courante
-  const currentDept = state.selectedDept || depts[0].code;
-  const communes = state.all
-    .filter(m => m.type === 'commune' && m.dept === currentDept)
-    .sort((a,b) => b.effort - a.effort);
-
+  if (!state.selectedDept) state.selectedDept = depts[0].code;
+  const currentDept = state.selectedDept;
+  const communes = getCommunesOfDept(currentDept);
   const deptMeta = depts.find(d => d.code === currentDept);
 
-  // Cartes des départements (sélecteur)
-  const deptOptions = depts.map(d =>
-    `<option value="${d.code}" ${d.code===currentDept?'selected':''}>${d.code} · ${escapeHtml(d.name)} (${d.count} communes)</option>`
-  ).join('');
+  // ⭐ Recherche par nom de département
+  const search = state.deptSearch.toLowerCase().trim();
+  const filteredDepts = search
+    ? depts.filter(d => d.code.toLowerCase().includes(search) || d.name.toLowerCase().includes(search))
+    : depts;
 
-  // KPI du département
+  const deptOptions = filteredDepts.map(d =>
+    `<option value="${d.code}" ${d.code===currentDept?'selected':''}>${d.code} · ${escapeHtml(d.name)} (${d.count})</option>`
+  ).join('') || '<option value="">Aucun résultat</option>';
+
   const totalEffort = communes.reduce((s,m)=>s+(m.effort||0),0);
   const totalPop = communes.reduce((s,m)=>s+(m.population||0),0);
   const avgHab = communes.length ? communes.reduce((s,m)=>s+(m.hab||0),0)/communes.length : 0;
-
-  // Top 5 communes
   const top5 = communes.slice(0,5);
 
-  // Distribution par décile
   const byDecile = {};
   for (const m of communes){ if (m.decile !== '—') byDecile[m.decile] = (byDecile[m.decile]||0) + 1; }
   const decileRows = Object.entries(byDecile).sort((a,b)=>parseInt(a[0])-parseInt(b[0])).map(([d,c]) => {
@@ -1545,7 +1540,6 @@ function renderDeptView(){
     </div>`;
   }).join('');
 
-  // Tableau des communes
   const rows = communes.slice(0, 100).map(m => `
     <tr>
       <td style="padding:6px 8px;font-family:var(--font-mono);font-size:11px;border-bottom:1px solid var(--grey-100)">${escapeHtml(m.insee)}</td>
@@ -1563,53 +1557,60 @@ function renderDeptView(){
         <strong style="color:var(--blue-france);font-size:14px">📍 Comparaison département</strong>
       </div>
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <input type="text" id="deptSearchInput" placeholder="🔍 Rechercher un département…"
+          value="${escapeHtml(state.deptSearch)}"
+          style="padding:7px 12px;border:1px solid var(--border);border-radius:4px;font-size:12px;
+          font-family:var(--font-sans);color:var(--text);background:var(--bg-panel);min-width:180px">
         <select id="deptSelect" class="versus-select" style="min-width:280px;border-color:var(--gold)">
           ${deptOptions}
         </select>
         <button id="deptCompareBtn" class="search-btn" style="padding:7px 14px;font-size:12px">⚔️ Comparer toutes</button>
+        <button id="deptExportPng" style="background:var(--green-bourgeon);color:#fff;border:none;padding:7px 14px;border-radius:4px;font-size:12px;font-weight:700;cursor:pointer;font-family:var(--font-sans)">🖼️ PNG</button>
       </div>
     </div>
 
-    <div class="kpi-strip" style="margin-bottom:14px">
-      <div class="kpi"><div class="label">Département</div><div class="value" style="font-size:18px">${currentDept}</div><div class="sub">${escapeHtml(deptMeta?.name || '')}</div></div>
-      <div class="kpi green"><div class="label">Communes</div><div class="value">${fmtNum(communes.length)}</div><div class="sub">dans le dépt</div></div>
-      <div class="kpi red"><div class="label">Effort total</div><div class="value">${fmtEUR(totalEffort)}</div><div class="sub">cumulé</div></div>
-      <div class="kpi amber"><div class="label">Effort/hab moyen</div><div class="value">${fmtEUR(avgHab)}</div><div class="sub">par commune</div></div>
-      <div class="kpi"><div class="label">Population</div><div class="value">${fmtNum(totalPop)}</div><div class="sub">cumulée</div></div>
-    </div>
+    <div id="deptCapture" style="background:var(--bg-app);padding:14px">
+      <div class="kpi-strip" style="margin-bottom:14px">
+        <div class="kpi"><div class="label">Département</div><div class="value" style="font-size:18px">${currentDept}</div><div class="sub">${escapeHtml(deptMeta?.name || '')}</div></div>
+        <div class="kpi green"><div class="label">Communes</div><div class="value">${fmtNum(communes.length)}</div><div class="sub">dans le dépt</div></div>
+        <div class="kpi red"><div class="label">Effort total</div><div class="value">${fmtEUR(totalEffort)}</div><div class="sub">cumulé</div></div>
+        <div class="kpi amber"><div class="label">Effort/hab moyen</div><div class="value">${fmtEUR(avgHab)}</div><div class="sub">par commune</div></div>
+        <div class="kpi"><div class="label">Population</div><div class="value">${fmtNum(totalPop)}</div><div class="sub">cumulée</div></div>
+      </div>
 
-    <div class="analytics-grid">
-      <div class="analytics-panel">
-        <div class="panel-head">🏆 TOP 5 COMMUNES (effort)</div>
-        <div class="panel-body">
-          ${top5.map((m,i) => `
-            <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--grey-100);font-size:12px">
-              <span style="font-weight:600">${i+1}. ${escapeHtml(m.nom)}</span>
-              <span style="font-family:var(--font-mono);font-weight:700;color:var(--red-marianne)">${fmtEUR(m.effort)}</span>
-            </div>`).join('')}
+      <div class="analytics-grid">
+        <div class="analytics-panel">
+          <div class="panel-head">🏆 TOP 5 COMMUNES (effort)</div>
+          <div class="panel-body">
+            ${top5.map((m,i) => `
+              <div style="display:flex;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--grey-100);font-size:12px">
+                <span style="font-weight:600">${i+1}. ${escapeHtml(m.nom)}</span>
+                <span style="font-family:var(--font-mono);font-weight:700;color:var(--red-marianne)">${fmtEUR(m.effort)}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div class="analytics-panel">
+          <div class="panel-head">🎯 RÉPARTITION PAR DÉCILE</div>
+          <div class="panel-body">${decileRows || '<div style="text-align:center;color:var(--grey-500)">Aucun décile</div>'}</div>
         </div>
       </div>
-      <div class="analytics-panel">
-        <div class="panel-head">🎯 RÉPARTITION PAR DÉCILE</div>
-        <div class="panel-body">${decileRows || '<div style="text-align:center;color:var(--grey-500)">Aucun décile</div>'}</div>
-      </div>
-    </div>
 
-    <div class="analytics-panel" style="margin-top:14px">
-      <div class="panel-head">📋 COMMUNES DU DÉPARTEMENT (${communes.length})</div>
-      <div class="panel-body" style="overflow-x:auto">
-        <table style="width:100%;border-collapse:collapse">
-          <thead><tr>
-            <th style="padding:8px;text-align:left;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">INSEE</th>
-            <th style="padding:8px;text-align:left;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">Commune</th>
-            <th style="padding:8px;text-align:right;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">Population</th>
-            <th style="padding:8px;text-align:right;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">Décile</th>
-            <th style="padding:8px;text-align:right;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">Effort</th>
-            <th style="padding:8px;text-align:right;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">/hab</th>
-          </tr></thead>
-          <tbody>${rows}</tbody>
-        </table>
-        ${communes.length > 100 ? `<div style="text-align:center;padding:10px;color:var(--grey-500);font-size:11px">… et ${communes.length-100} autres communes</div>` : ''}
+      <div class="analytics-panel" style="margin-top:14px">
+        <div class="panel-head">📋 COMMUNES DU DÉPARTEMENT (${communes.length})</div>
+        <div class="panel-body" style="overflow-x:auto">
+          <table style="width:100%;border-collapse:collapse">
+            <thead><tr>
+              <th style="padding:8px;text-align:left;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">INSEE</th>
+              <th style="padding:8px;text-align:left;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">Commune</th>
+              <th style="padding:8px;text-align:right;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">Population</th>
+              <th style="padding:8px;text-align:right;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">Décile</th>
+              <th style="padding:8px;text-align:right;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">Effort</th>
+              <th style="padding:8px;text-align:right;font-size:10px;color:var(--grey-700);border-bottom:2px solid var(--border)">/hab</th>
+            </tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+          ${communes.length > 100 ? `<div style="text-align:center;padding:10px;color:var(--grey-500);font-size:11px">… et ${communes.length-100} autres communes</div>` : ''}
+        </div>
       </div>
     </div>`;
 
@@ -1617,8 +1618,26 @@ function renderDeptView(){
     area.querySelectorAll('.anim-bar').forEach(b => { b.style.width = b.dataset.w; });
   });
 
+  // ⭐ Recherche département
+  const searchInput = document.getElementById('deptSearchInput');
+  if (searchInput){
+    searchInput.addEventListener('input', (e) => {
+      state.deptSearch = e.target.value;
+      // Re-render juste le select sans perdre le focus
+      const sel = document.getElementById('deptSelect');
+      if (!sel) return;
+      const filtered = getDeptsMap().filter(d =>
+        !state.deptSearch || d.code.toLowerCase().includes(state.deptSearch.toLowerCase()) || d.name.toLowerCase().includes(state.deptSearch.toLowerCase())
+      );
+      sel.innerHTML = filtered.map(d =>
+        `<option value="${d.code}" ${d.code===state.selectedDept?'selected':''}>${d.code} · ${escapeHtml(d.name)} (${d.count})</option>`
+      ).join('') || '<option value="">Aucun résultat</option>';
+    });
+  }
+
   document.getElementById('deptSelect')?.addEventListener('change', e => {
     state.selectedDept = e.target.value;
+    state.deptSearch = '';
     renderDeptView();
   });
 
@@ -1632,6 +1651,185 @@ function renderDeptView(){
     document.querySelector('[data-view="versus"]')?.classList.add('active');
     renderVersus();
     toast(`⚔️ ${state.versusIds.length} communes du dépt ${currentDept} ajoutées`, 'success');
+  });
+
+  document.getElementById('deptExportPng')?.addEventListener('click', exportDeptPng);
+}
+
+async function exportDeptPng(){
+  const target = document.getElementById('deptCapture');
+  if (!target){ toast('Rien à exporter', 'error'); return; }
+  try {
+    const rect = target.getBoundingClientRect();
+    const W = Math.ceil(rect.width);
+    const H = Math.ceil(rect.height);
+    const clone = target.cloneNode(true);
+
+    const styles = Array.from(document.styleSheets)
+      .map(ss => {
+        try { return Array.from(ss.cssRules).map(r => r.cssText).join('\n'); }
+        catch(e){ return ''; }
+      }).join('\n');
+
+    const html = `
+      <div xmlns="http://www.w3.org/1999/xhtml" style="width:${W}px;background:#f6f6f6">
+        <style>${styles}</style>
+        <div style="padding:20px;font-family:'Marianne',system-ui,sans-serif">
+          ${clone.outerHTML}
+        </div>
+      </div>`;
+
+    const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}">
+        <foreignObject width="100%" height="100%">${html}</foreignObject>
+      </svg>`;
+
+    const blob = new Blob([svg], {type:'image/svg+xml;charset=utf-8'});
+    const url = URL.createObjectURL(blob);
+    const img = new Image();
+    img.onload = () => {
+      const scale = 2;
+      const canvas = document.createElement('canvas');
+      canvas.width = W * scale;
+      canvas.height = H * scale;
+      const ctx = canvas.getContext('2d');
+      ctx.fillStyle = '#f6f6f6';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.scale(scale, scale);
+      ctx.drawImage(img, 0, 0);
+      URL.revokeObjectURL(url);
+      canvas.toBlob(blob => {
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = `dept-${state.selectedDept}-plf2027.png`;
+        a.click();
+        toast('🖼️ PNG département exporté', 'success');
+      }, 'image/png');
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); toast('Erreur export PNG', 'error'); };
+    img.src = url;
+  } catch(e){
+    console.warn(e);
+    toast('Erreur export PNG', 'error');
+  }
+}
+
+/* =========================================================
+   VUE 2 DÉPARTEMENTS CÔTE À CÔTE
+   ========================================================= */
+function renderDeptVersus(){
+  const area = document.getElementById('resultsArea'); if (!area) return;
+  if (!state.all.length){ area.innerHTML = '<div class="empty">Chargez des données.</div>'; return; }
+
+  const depts = getDeptsMap();
+  if (depts.length < 2){
+    area.innerHTML = '<div class="empty">Il faut au moins 2 départements avec des communes.</div>';
+    return;
+  }
+
+  if (!state.deptA || !depts.find(d => d.code === state.deptA)) state.deptA = depts[0].code;
+  if (!state.deptB || !depts.find(d => d.code === state.deptB)){
+    state.deptB = depts.find(d => d.code !== state.deptA)?.code || depts[1].code;
+  }
+
+  const A = depts.find(d => d.code === state.deptA);
+  const B = depts.find(d => d.code === state.deptB);
+  const communesA = getCommunesOfDept(state.deptA);
+  const communesB = getCommunesOfDept(state.deptB);
+
+  const deptOptions = (selected) => depts.map(d =>
+    `<option value="${d.code}" ${d.code===selected?'selected':''}>${d.code} · ${escapeHtml(d.name)} (${d.count})</option>`
+  ).join('');
+
+  const avgHabA = communesA.length ? communesA.reduce((s,m)=>s+(m.hab||0),0)/communesA.length : 0;
+  const avgHabB = communesB.length ? communesB.reduce((s,m)=>s+(m.hab||0),0)/communesB.length : 0;
+  const totalPopA = communesA.reduce((s,m)=>s+(m.population||0),0);
+  const totalPopB = communesB.reduce((s,m)=>s+(m.population||0),0);
+  const top5A = communesA.slice(0,5);
+  const top5B = communesB.slice(0,5);
+
+  const row = (label, va, vb, fmt) => {
+    const f = fmt || (v => fmtEUR(v));
+    const na = typeof va === 'number' ? va : 0;
+    const nb = typeof vb === 'number' ? vb : 0;
+    const max = Math.max(na, nb, 1);
+    const wA = (na/max)*100;
+    const wB = (nb/max)*100;
+    const cmp = na === nb ? '=' : na > nb ? '▲' : '▼';
+    const cls = na === nb ? 'neu' : na > nb ? 'pos' : 'neg';
+    return `<div style="display:grid;grid-template-columns:140px 1fr 1fr;gap:10px;
+        align-items:center;padding:8px 0;border-bottom:1px solid var(--grey-100);font-size:12px">
+      <div style="font-weight:700;color:var(--grey-700);font-size:11px">${label}</div>
+      <div>
+        <div style="font-family:var(--font-mono);font-weight:700;color:var(--blue-france);font-size:11px;text-align:right">${f(na)}</div>
+        <div style="background:var(--grey-100);height:6px;border-radius:3px;margin-top:3px;overflow:hidden">
+          <div style="width:${wA}%;height:100%;background:var(--blue-france);margin-left:auto"></div>
+        </div>
+      </div>
+      <div>
+        <div style="font-family:var(--font-mono);font-weight:700;color:var(--red-marianne);font-size:11px">${f(nb)} ${cmp}</div>
+        <div style="background:var(--grey-100);height:6px;border-radius:3px;margin-top:3px;overflow:hidden">
+          <div style="width:${wB}%;height:100%;background:var(--red-marianne)"></div>
+        </div>
+      </div>
+    </div>`;
+  };
+
+  const top5Rows = (list, color) => list.map((m,i) => `
+    <div style="display:flex;justify-content:space-between;padding:5px 0;border-bottom:1px solid var(--grey-100);font-size:11px">
+      <span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i+1}. ${escapeHtml(m.nom)}</span>
+      <span style="font-family:var(--font-mono);font-weight:700;color:${color};margin-left:6px">${fmtEUR(m.effort)}</span>
+    </div>`).join('');
+
+  area.innerHTML = `
+    <div class="analytics-panel" style="margin-bottom:14px">
+      <div class="panel-head">🆚 COMPARAISON DE 2 DÉPARTEMENTS</div>
+      <div class="panel-body">
+        <div style="display:grid;grid-template-columns:1fr auto 1fr;gap:14px;align-items:center;margin-bottom:16px">
+          <select id="deptSelA" class="versus-select" style="border-color:var(--blue-france)">${deptOptions(state.deptA)}</select>
+          <div style="font-size:22px;color:var(--gold);font-weight:800">⚔️</div>
+          <select id="deptSelB" class="versus-select" style="border-color:var(--red-marianne)">${deptOptions(state.deptB)}</select>
+        </div>
+
+        <div style="display:flex;justify-content:space-between;margin-bottom:12px;font-size:13px">
+          <strong style="color:var(--blue-france)">📍 ${state.deptA} · ${escapeHtml(A.name)}</strong>
+          <strong style="color:var(--red-marianne)">${state.deptB} · ${escapeHtml(B.name)} 📍</strong>
+        </div>
+
+        ${row('Nombre de communes', A.count, B.count, v => fmtNum(v))}
+        ${row('Effort total', A.effort, B.effort)}
+        ${row('Effort/hab moyen', avgHabA, avgHabB)}
+        ${row('Population totale', totalPopA, totalPopB, v => fmtNum(v))}
+
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px;margin-top:16px">
+          <div>
+            <h4 style="font-size:11px;text-transform:uppercase;color:var(--blue-france);letter-spacing:.6px;
+              margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">🏆 Top 5 · ${state.deptA}</h4>
+            ${top5Rows(top5A, 'var(--blue-france)')}
+          </div>
+          <div>
+            <h4 style="font-size:11px;text-transform:uppercase;color:var(--red-marianne);letter-spacing:.6px;
+              margin-bottom:8px;padding-bottom:6px;border-bottom:1px solid var(--border)">🏆 Top 5 · ${state.deptB}</h4>
+            ${top5Rows(top5B, 'var(--red-marianne)')}
+          </div>
+        </div>
+      </div>
+    </div>`;
+
+  document.getElementById('deptSelA')?.addEventListener('change', e => {
+    state.deptA = e.target.value;
+    if (state.deptA === state.deptB){
+      const other = depts.find(d => d.code !== state.deptA);
+      state.deptB = other?.code || state.deptB;
+    }
+    renderDeptVersus();
+  });
+  document.getElementById('deptSelB')?.addEventListener('change', e => {
+    state.deptB = e.target.value;
+    if (state.deptB === state.deptA){
+      const other = depts.find(d => d.code !== state.deptB);
+      state.deptA = other?.code || state.deptA;
+    }
+    renderDeptVersus();
   });
 }
 
@@ -1752,8 +1950,6 @@ document.getElementById('filtersClear')?.addEventListener('click', () => {
   const qi = document.getElementById('queryInput'); if (qi) qi.value = '';
   populateDecileChips(); applyFilters(1);
 });
-
-// Multi-sélection
 document.getElementById('multiCompareBtn')?.addEventListener('click', () => {
   if (state.selectedIds.size < 2){ toast('⚠️ Sélectionnez au moins 2 collectivités', 'error'); return; }
   state.versusIds = [...state.selectedIds].slice(0, 8);
@@ -1767,7 +1963,6 @@ document.getElementById('multiClearBtn')?.addEventListener('click', () => {
   updateMultiBar();
   renderResults();
 });
-
 document.querySelectorAll('.mode-tab').forEach(t => {
   t.addEventListener('click', () => {
     document.querySelectorAll('.mode-tab').forEach(x => x.classList.remove('active'));
@@ -1808,13 +2003,18 @@ document.getElementById('exportPng')?.addEventListener('click', () => {
   const v = document.querySelector('.mode-tab.active')?.dataset.view;
   if (v === 'map') exportMapPng();
   else if (v === 'versus') exportVersusPng();
-  else toast('💡 PNG disponible sur les vues Carte et Comparer', 'info');
+  else if (v === 'deptview') exportDeptPng();
+  else toast('💡 PNG disponible sur : Carte, Comparer, Département', 'info');
 });
 document.getElementById('clearBtn')?.addEventListener('click', () => {
   state.all = []; state.filtered = [];
   state.selectedDeciles.clear();
   state.versusIds = [];
   state.selectedIds.clear();
+  state.selectedDept = null;
+  state.deptA = null;
+  state.deptB = null;
+  state.deptSearch = '';
   const qi = document.getElementById('queryInput'); if (qi) qi.value = '';
   safeSet('tbCount', '—'); safeSet('tbMontant', '—');
   document.getElementById('exportCsv').disabled = true;
